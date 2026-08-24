@@ -6,12 +6,12 @@ FROM php:8.3-apache
 # ffmpeg: RoboDoc2 shells out to /usr/bin/ffmpeg for background video compression
 #         on upload (see app/controllers/EntryController.php) — required, not optional.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        libzip-dev libpng-dev libjpeg62-turbo-dev libwebp-dev libfreetype6-dev \
+        libzip-dev libpng-dev libjpeg62-turbo-dev libwebp-dev libfreetype6-dev libonig-dev \
         default-mysql-client ffmpeg unzip \
     && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install -j"$(nproc)" pdo_mysql mysqli gd exif zip mbstring \
     && a2enmod rewrite headers \
-    && apt-get purge -y --auto-remove libzip-dev libpng-dev libjpeg62-turbo-dev libwebp-dev libfreetype6-dev \
+    && apt-get purge -y --auto-remove libzip-dev libpng-dev libjpeg62-turbo-dev libwebp-dev libfreetype6-dev libonig-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ── Apache: listen on 8080, serve from public/ ──────────────────────────────
