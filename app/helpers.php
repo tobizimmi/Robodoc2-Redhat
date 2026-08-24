@@ -1480,9 +1480,11 @@ function runMigrationsReport(): array {
     }
 
     // -- Migration: mower_serial + firmware_version on quick_captures
-    foreach (['mower_serial VARCHAR(100) NULL', 'firmware_version VARCHAR(50) NULL'] as $__col) {
-        $__cname = explode(' ', $__col)[0];
-        if (empty(Database::fetchAll("SHOW COLUMNS FROM quick_captures LIKE '" . $__cname . "'"))) {
-            Database::execute("ALTER TABLE quick_captures ADD COLUMN " . $__col);
+    if (Database::fetchAll("SHOW TABLES LIKE 'quick_captures'")) {
+        foreach (['mower_serial VARCHAR(100) NULL', 'firmware_version VARCHAR(50) NULL'] as $__col) {
+            $__cname = explode(' ', $__col)[0];
+            if (empty(Database::fetchAll("SHOW COLUMNS FROM quick_captures LIKE '" . $__cname . "'"))) {
+                Database::execute("ALTER TABLE quick_captures ADD COLUMN " . $__col);
+            }
         }
     }
