@@ -1,0 +1,78 @@
+# OPTIONAL: run MySQL inside the cluster instead of using a managed database
+# (e.g. Azure Database for MySQL Flexible Server). Good enough to get started;
+# for a real production instance, a managed DB is recommended — see DEPLOYMENT.md.
+#
+# Uses the Red Hat-maintained mysql-80 image that ships in every OpenShift
+# cluster's built-in "openshift" namespace image streams (no extra pull
+# secret needed, and it's already arbitrary-UID compatible).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: robodoc2-mysql-data
+  labels:
+    app: robodoc2-mysql
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: robodoc2-mysql
+  labels:
+    app: robodoc2-mysql
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate     # ReadWriteOnce volume — never run two MySQL pods at once
+  selector:
+    matchLabels:
+      app: robodoc2-mysql
+  template:
+    metadata:
+      labels:
+        app: robodoc2-mysql
+    spec:
+      containers:
+        - name: mysql
+          image: image-registry.openshift-image-registry.svc:5000/openshift/mysql:8.0-el8
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_USER
+              valueFrom: { secretKeyRef: { name: robodoc2-db, key: DB_USER } }
+            - name: MYSQL_PASSWORD
+              valueFrom: { secretKeyRef: { name: robodoc2-db, key: DB_PASS } }
+            - name: MYSQL_DATABASE
+              valueFrom: { secretKeyRef: { name: robodoc2-db, key: DB_NAME } }
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: robodoc2-db, key: MYSQL_ROOT_PASSWORD } }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql/data
+          readinessProbe:
+            exec: { command: ["/bin/sh", "-c", "mysqladmin -u root -p\"$MYSQL_ROOT_PASSWORD\" ping"] }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 512Mi }
+            limits:   { cpu: "1",  memory: 1Gi }
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: robodoc2-mysql-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: robodoc2-mysql
+  labels:
+    app: robodoc2-mysql
+spec:
+  selector:
+    app: robodoc2-mysql
+  ports:
+    - port: 3306
+      targetPort: 3306

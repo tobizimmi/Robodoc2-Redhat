@@ -1,0 +1,33 @@
+# Builds the container image *inside* OpenShift from this Git repo's Dockerfile
+# and stores it in the cluster's internal registry — no external registry
+# (ACR, Docker Hub, ...) needed.
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: robodoc2
+  labels:
+    app: robodoc2
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: robodoc2
+  labels:
+    app: robodoc2
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/tobizimmi/Robodoc2-Redhat.git
+      ref: main
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: robodoc2:latest
+  triggers:
+    - type: ConfigChange
+    - type: ImageChange

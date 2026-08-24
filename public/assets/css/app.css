@@ -1,0 +1,271 @@
+:root {
+  --sidebar-width: 240px;
+  --transition-fast: 150ms ease;
+  --transition-base: 200ms ease;
+  --transition-slow: 300ms ease;
+}
+
+body {
+  font-family: 'Fira Sans', system-ui, sans-serif;
+  overscroll-behavior-y: none;
+}
+
+#sidebar {
+  width: var(--sidebar-width);
+  min-height: 100vh;
+  position: sticky;
+  top: 0;
+  max-height: 100vh;
+  overflow-y: auto;
+}
+
+#content {
+  min-width: 0;
+}
+
+/* Fixed top bar — more reliable than sticky in iOS WKWebView / mobile Safari.
+   In WKWebView (without viewport-fit:cover) position:fixed top:0 already sits
+   below the status bar, so no safe-area padding is needed. */
+#topbar {
+  position: fixed;
+  top: 0;
+  left: var(--sidebar-width);
+  right: 0;
+  z-index: 1020;
+}
+#content > main {
+  padding-top: 64px !important; /* !important overrides Bootstrap p-4's !important */
+}
+@media (max-width: 768px) {
+  #topbar { left: 0; }
+}
+
+/* Remove default dropdown caret from the avatar button */
+.dropdown-toggle-no-caret::after { display: none; }
+
+#wrapper {
+  min-height: 100vh;
+}
+
+/* Sidebar nav */
+#sidebar .nav-link {
+  font-size: .875rem;
+  padding: .4rem .75rem;
+  border-radius: .375rem;
+  transition: background .15s;
+}
+#sidebar .nav-link:hover, #sidebar .nav-link.active {
+  background: rgba(99,102,241,.2);
+  color: #a5b4fc !important;
+}
+#sidebar .nav-link.active {
+  background: rgba(99,102,241,.35) !important;
+  font-weight: 600;
+}
+
+/* Cards */
+.card {
+  border-color: rgba(255,255,255,.1) !important;
+}
+.card-hover {
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
+  cursor: pointer;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,.4);
+}
+
+/* Entry cards (card view) */
+.entry-card {
+  background: #1e293b;
+  border-color: rgba(255,255,255,.1) !important;
+  transition: transform var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
+}
+.entry-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  border-color: rgba(99,102,241,.5) !important;
+}
+
+/* Stat cards */
+.stat-card { border-left: 3px solid; }
+.stat-card .stat-number { font-size: 1.75rem; font-weight: 700; }
+
+/* Badges */
+.badge { font-weight: 500; }
+
+/* Table */
+.table-dark th { font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; font-weight: 600; }
+
+/* Entry list */
+.entry-row { transition: background var(--transition-fast); cursor: pointer; }
+.entry-row:hover { background: rgba(255,255,255,.05) !important; }
+
+/* Clickable table rows — don't apply pointer to non-link cells */
+.entry-row td:last-child { cursor: default; }
+
+/* File upload zone */
+.upload-zone {
+  border: 2px dashed rgba(255,255,255,.2);
+  border-radius: .5rem;
+  padding: 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+  position: relative;
+}
+.upload-zone:hover, .upload-zone.drag-over {
+  border-color: #6366f1;
+  background: rgba(99,102,241,.08);
+}
+
+/* Media gallery */
+.media-thumb {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: .375rem;
+  cursor: pointer;
+  transition: opacity .15s;
+  border: 2px solid transparent;
+}
+.media-thumb:hover { opacity: .85; border-color: #6366f1; }
+.media-thumb.cover-thumb { border-color: #f59e0b; }
+
+/* Lightbox */
+#lightbox {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.9);
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+#lightbox.active { display: flex; }
+#lightbox img, #lightbox video {
+  max-width: 95vw;
+  max-height: 85vh;
+  border-radius: .5rem;
+  object-fit: contain;
+}
+
+/* Priority colors */
+.priority-low      { color: #94a3b8; }
+.priority-medium   { color: #f59e0b; }
+.priority-high     { color: #f97316; }
+.priority-critical { color: #ef4444; }
+
+/* Status pills */
+.status-pending   { background: #334155; }
+.status-passed    { background: #166534; }
+.status-failed    { background: #7f1d1d; }
+.status-skipped   { background: #374151; }
+.status-blocked   { background: #7c2d12; }
+
+/* Form improvements */
+.form-control, .form-select {
+  background-color: #1e293b;
+  border-color: rgba(255,255,255,.15);
+  color: #f1f5f9;
+}
+.form-control:focus, .form-select:focus {
+  background-color: #1e293b;
+  border-color: #6366f1;
+  color: #f1f5f9;
+  box-shadow: 0 0 0 .2rem rgba(99,102,241,.25);
+}
+
+/* Pagination */
+.pagination .page-link {
+  background: #1e293b;
+  border-color: rgba(255,255,255,.15);
+  color: #94a3b8;
+}
+.pagination .page-item.active .page-link {
+  background: #6366f1;
+  border-color: #6366f1;
+  color: #fff;
+}
+
+/* Tags/chips */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  padding: .2rem .6rem;
+  border-radius: 999px;
+  font-size: .75rem;
+  font-weight: 500;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.12);
+}
+
+/* Timeline */
+.timeline { position: relative; }
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 1rem;
+  top: 0; bottom: 0;
+  width: 2px;
+  background: rgba(255,255,255,.1);
+}
+.timeline-item { position: relative; padding-left: 2.5rem; }
+.timeline-dot {
+  position: absolute;
+  left: .6rem;
+  top: .4rem;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #6366f1;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  #sidebar {
+    position: fixed;
+    left: -100%;
+    z-index: 1045;
+    transition: left .3s;
+  }
+  #sidebar.open { left: 0; }
+}
+
+/* Color dot */
+.color-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: .25rem;
+}
+
+/* Sort links in table headers */
+#tableView thead th a {
+  transition: color var(--transition-fast);
+}
+#tableView thead th a:hover {
+  color: #a5b4fc !important;
+}
+
+/* View toggle active state */
+.view-btn.active {
+  background: rgba(99,102,241,.3);
+  border-color: rgba(99,102,241,.6);
+}
+
+/* GPS map placeholder */
+.gps-preview {
+  border-radius: .375rem;
+  background: #1e293b;
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .875rem;
+  color: #64748b;
+}

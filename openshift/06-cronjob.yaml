@@ -1,0 +1,51 @@
+# Replaces the `* * * * * php .../app/cron/runner.php` crontab entry from the
+# classic host. runner.php itself decides which jobs (Jira/Zentao sync, video
+# compression finalize, ...) are actually due, so running the container every
+# minute and letting it exit immediately in between is correct and cheap.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: robodoc2-cron
+  labels:
+    app: robodoc2
+spec:
+  schedule: "* * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 50   # must finish well within the next minute's trigger
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: robodoc2-cron
+              image: image-registry.openshift-image-registry.svc:5000/YOUR-PROJECT/robodoc2:latest
+              command: ["php", "/var/www/html/app/cron/runner.php"]
+              env:
+                - name: DB_HOST
+                  valueFrom: { secretKeyRef: { name: robodoc2-db, key: DB_HOST } }
+                - name: DB_PORT
+                  valueFrom: { secretKeyRef: { name: robodoc2-db, key: DB_PORT } }
+                - name: DB_NAME
+                  valueFrom: { secretKeyRef: { name: robodoc2-db, key: DB_NAME } }
+                - name: DB_USER
+                  valueFrom: { secretKeyRef: { name: robodoc2-db, key: DB_USER } }
+                - name: DB_PASS
+                  valueFrom: { secretKeyRef: { name: robodoc2-db, key: DB_PASS } }
+                - name: APP_KEY
+                  valueFrom: { secretKeyRef: { name: robodoc2-app, key: APP_KEY } }
+                - name: APP_SECRET
+                  valueFrom: { secretKeyRef: { name: robodoc2-app, key: APP_SECRET } }
+              volumeMounts:
+                - name: uploads
+                  mountPath: /var/www/html/uploads
+              resources:
+                requests: { cpu: 50m, memory: 128Mi }
+                limits:   { cpu: 500m, memory: 512Mi }
+          volumes:
+            - name: uploads
+              persistentVolumeClaim:
+                claimName: robodoc2-uploads

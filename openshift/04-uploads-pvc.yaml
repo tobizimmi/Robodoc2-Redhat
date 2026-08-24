@@ -1,0 +1,16 @@
+# Persistent storage for attachments/photos/videos (mounted at /var/www/html/uploads
+# in every pod that needs it — the web Deployment AND the CronJob below).
+# ReadWriteOnce is fine as long as only one web replica runs; if you scale the
+# web Deployment beyond 1 replica, switch this to a ReadWriteMany-capable
+# StorageClass (e.g. Azure Files) instead of the default (Azure Disk, RWO-only).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: robodoc2-uploads
+  labels:
+    app: robodoc2
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 20Gi
