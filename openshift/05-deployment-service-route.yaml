@@ -6,6 +6,13 @@ metadata:
     app: robodoc2
 spec:
   replicas: 1
+  # ReadWriteOnce uploads volume — only one pod can mount it at a time, so the
+  # default RollingUpdate strategy deadlocks (new pod can't attach while the
+  # old one still holds it, "Multi-Attach error"). Recreate stops the old pod
+  # first, then starts the new one — brief downtime per deploy, but no
+  # deadlock. Same reasoning as robodoc2-mysql in 03-mysql-optional.yaml.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: robodoc2
