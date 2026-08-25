@@ -46,6 +46,27 @@
     </div>
   </div>
 
+  <!-- Relay (for networks that can't reach Zentao directly) -->
+  <div class="card mb-4" style="max-width:800px">
+    <div class="card-header border-secondary fw-semibold small"><i class="bi bi-arrow-left-right me-1"></i>Relay (optional)</div>
+    <div class="card-body p-4">
+      <div class="form-text mb-3">
+        Nur nötig, wenn diese RoboDoc2-Instanz Zentao nicht direkt erreichen kann (z.B. in einem
+        netzwerkbeschränkten Cluster). Alle Zentao-API-Aufrufe laufen dann stattdessen über ein
+        kleines Proxy-Script auf einem Host, der Zentao erreichen kann. Leer lassen für direkten Zugriff.
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Relay URL</label>
+        <input type="url" name="zentao_relay_url" class="form-control" value="<?= e($s['zentao_relay_url'] ?? '') ?>" placeholder="https://zimmimail.de/zentao-relay/relay.php">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Relay Secret</label>
+        <input type="password" name="zentao_relay_secret" class="form-control" placeholder="<?= $hasRelaySecret ? '•••••••• (unverändert lassen = nicht ändern)' : '' ?>">
+        <div class="form-text">Muss mit <code>RELAY_SECRET</code> auf dem Relay-Server übereinstimmen. Leer lassen, um den gespeicherten Wert zu behalten.</div>
+      </div>
+    </div>
+  </div>
+
   <!-- Templates -->
   <div class="card mb-4" style="max-width:800px">
     <div class="card-header border-secondary fw-semibold small"><i class="bi bi-file-text me-1"></i>Bug Templates</div>

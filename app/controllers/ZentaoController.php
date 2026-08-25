@@ -437,6 +437,74 @@ class ZentaoController
 
     public static function apiRequest(string $method, string $url, string $token, array $body): array
     {
+        $relayUrl    = trim(appSetting('zentao_relay_url'));
+        $relaySecret = trim(Encryption::decrypt((string)appSetting('zentao_relay_secret')));
+        if ($relayUrl && $relaySecret) {
+            return self::apiRequestViaRelay($relayUrl, $relaySecret, $method, $url, $token, $body);
+        }
+        return self::apiRequestDirect($method, $url, $token, $body);
+    }
+
+    // -- Relay: forward via a small proxy script on a host that *can* reach
+    // Zentao, for environments (e.g. a network-restricted OpenShift cluster)
+    // that cannot connect to Zentao directly. RoboDoc2 sends the target base
+    // URL with every request (so Zentao's URL only needs to be configured
+    // once, here — not duplicated on the relay server); the relay itself
+    // checks the target host against its own allow-list before forwarding,
+    // so a leaked relay secret still can't be used to reach arbitrary hosts.
+    // Keeps the exact same [httpCode, decoded] contract as apiRequestDirect()
+    // so every existing caller works unchanged.
+    private static function apiRequestViaRelay(string $relayUrl, string $relaySecret, string $method, string $url, string $token, array $body): array
+    {
+        $effectiveUrl = ($method === 'GET' && $body) ? $url . '?' . http_build_query($body) : $url;
+        $parts   = parse_url($effectiveUrl);
+        $path    = ($parts['path'] ?? '') . (!empty($parts['query']) ? '?' . $parts['query'] : '');
+        $baseUrl = ($parts['scheme'] ?? '') . '://' . ($parts['host'] ?? '') . (isset($parts['port']) ? ':' . $parts['port'] : '');
+
+        $payload = json_encode([
+            'method'   => $method,
+            'base_url' => $baseUrl,
+            'path'     => $path,
+            'headers'  => ['Content-Type' => 'application/json', 'Accept' => 'application/json', 'Token' => $token],
+            'body'     => $method === 'GET' ? null : $body,
+        ]);
+
+        $ch = curl_init($relayUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $payload,
+            CURLOPT_HTTPHEADER     => ['Content-Type: application/json', 'Authorization: Bearer ' . $relaySecret],
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT        => 30,
+            CURLOPT_SSL_VERIFYPEER => true,
+        ]);
+        $resp          = curl_exec($ch);
+        $relayHttpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr       = curl_error($ch);
+        curl_close($ch);
+
+        if ($resp === false || $relayHttpCode !== 200) {
+            return [0, ['message' => 'Zentao relay unreachable: ' . ($curlErr ?: "HTTP $relayHttpCode from relay")]];
+        }
+        $relayData = json_decode($resp, true);
+        if (!is_array($relayData)) return [0, ['message' => 'Zentao relay returned an invalid response.']];
+
+        $zentaoCode = (int)($relayData['status'] ?? 0);
+        $zentaoBody = $relayData['body'] ?? null;
+        if ($zentaoBody === null && !empty($relayData['curlErr'])) {
+            return [$zentaoCode, ['message' => 'Connection to Zentao (via relay) failed: ' . $relayData['curlErr']]];
+        }
+
+        $decoded = json_decode($zentaoBody ?: '{}', true);
+        if ($decoded === null && $zentaoBody) {
+            $decoded = ['message' => substr(strip_tags((string)$zentaoBody), 0, 250)];
+        }
+        return [$zentaoCode, $decoded ?? []];
+    }
+
+    private static function apiRequestDirect(string $method, string $url, string $token, array $body): array
+    {
         $headers = ['Content-Type: application/json', 'Accept: application/json', 'Token: ' . $token];
         $ch = curl_init();
         curl_setopt_array($ch, [

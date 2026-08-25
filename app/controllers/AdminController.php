@@ -319,12 +319,31 @@ class AdminController {
                 Database::execute('INSERT INTO app_settings (setting_key, setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)',
                     [$sfKey, json_encode(array_values($val))]);
             }
+            // Relay: for environments that can't reach Zentao directly (e.g. a network-
+            // restricted cluster), route all Zentao API calls through a small proxy script
+            // hosted somewhere that can. Leave empty to call Zentao directly (default).
+            Database::execute(
+                'INSERT INTO app_settings (setting_key, setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)',
+                ['zentao_relay_url', trim($_POST['zentao_relay_url'] ?? '')]
+            );
+            $newRelaySecret = trim($_POST['zentao_relay_secret'] ?? '');
+            if ($newRelaySecret !== '') {
+                Database::execute(
+                    'INSERT INTO app_settings (setting_key, setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)',
+                    ['zentao_relay_secret', Encryption::encryptIfNeeded($newRelaySecret)]
+                );
+            }
             flash('success', 'Zentao settings saved.');
             redirect('/admin/zentao');
         }
         $s          = array_column(Database::fetchAll('SELECT * FROM app_settings'), 'setting_value', 'setting_key');
         $entryTypes = Database::fetchAll('SELECT name FROM entry_types ORDER BY sort_order, name');
-        View::render('admin/zentao', ['title' => 'Zentao Settings', 's' => $s, 'entryTypes' => $entryTypes]);
+        View::render('admin/zentao', [
+            'title'            => 'Zentao Settings',
+            's'                => $s,
+            'entryTypes'       => $entryTypes,
+            'hasRelaySecret'   => !empty($s['zentao_relay_secret']),
+        ]);
     }
 
     // ── Jira Settings (templates + field mapping) ─────────────
