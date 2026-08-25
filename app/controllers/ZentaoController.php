@@ -99,7 +99,10 @@ class ZentaoController
         ];
 
         [$code, $data] = self::apiRequest('PUT', "$zentaoUrl/api.php/v1/bugs/$bugId", $token, $body);
-        if ($code >= 300) return ['error' => self::extractError($data, $code)];
+        // $code === 0 means curl never got a response at all (connection/DNS/TLS failure) —
+        // must be treated as an error too, not just HTTP status codes >= 300, otherwise a total
+        // connection failure silently falls through as if the push had succeeded.
+        if ($code === 0 || $code >= 300) return ['error' => self::extractError($data, $code)];
 
         // Re-fetch bug to store accurate hash/status
         [, $bugData] = self::apiRequest('GET', "$zentaoUrl/api.php/v1/bugs/$bugId", $token, []);
@@ -457,13 +460,21 @@ class ZentaoController
             curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
         }
 
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $response  = curl_exec($ch);
+        $curlErrno = curl_errno($ch);
+        $curlErr   = curl_error($ch);
+        $httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
         $decoded = json_decode($response ?: '{}', true);
         if ($decoded === null && $response) {
             $decoded = ['message' => substr(strip_tags((string)$response), 0, 250)];
+        }
+        // curl_exec() failing outright (DNS/connection/TLS/timeout) yields HTTP code 0 and no
+        // response body — without this, the caller only ever sees the unhelpful "HTTP 0",
+        // with no indication of what actually went wrong (host unreachable, timeout, bad cert, ...).
+        if ($response === false && $curlErr) {
+            $decoded = ['message' => "Connection to Zentao failed: $curlErr" . ($curlErrno ? " (curl errno $curlErrno)" : '')];
         }
         return [$httpCode, $decoded ?? []];
     }
