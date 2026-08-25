@@ -481,11 +481,20 @@ class ZentaoController
         ]);
         $resp          = curl_exec($ch);
         $relayHttpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $redirectUrl   = curl_getinfo($ch, CURLINFO_REDIRECT_URL);
         $curlErr       = curl_error($ch);
         curl_close($ch);
 
         if ($resp === false || $relayHttpCode !== 200) {
-            return [0, ['message' => 'Zentao relay unreachable: ' . ($curlErr ?: "HTTP $relayHttpCode from relay")]];
+            $detail = $curlErr ?: "HTTP $relayHttpCode from relay";
+            if (!$curlErr && in_array($relayHttpCode, [301, 302, 303, 307, 308], true) && $redirectUrl) {
+                // The relay URL itself got redirected (e.g. an http:// URL being force-upgraded
+                // to https://, or a missing filename triggering a directory-slash redirect) -
+                // surface the target so the misconfigured Relay URL can be fixed directly,
+                // instead of leaving the admin to guess why the relay is "unreachable".
+                $detail .= " (redirects to: $redirectUrl - update the Relay URL in Admin > Zentao Settings to this exact address)";
+            }
+            return [0, ['message' => 'Zentao relay unreachable: ' . $detail]];
         }
         $relayData = json_decode($resp, true);
         if (!is_array($relayData)) return [0, ['message' => 'Zentao relay returned an invalid response.']];
