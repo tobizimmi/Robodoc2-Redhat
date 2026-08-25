@@ -494,6 +494,15 @@ class ZentaoController
                 // instead of leaving the admin to guess why the relay is "unreachable".
                 $detail .= " (redirects to: $redirectUrl - update the Relay URL in Admin > Zentao Settings to this exact address)";
             }
+            // The relay returns a JSON body with its own 'error' explaining *why* (missing
+            // auth header, secret mismatch, host not allow-listed, ...) - without surfacing
+            // it, the admin only ever sees a bare "HTTP 401/403 from relay" and has to guess.
+            if (is_string($resp) && $resp !== '') {
+                $relayErr = json_decode($resp, true);
+                if (is_array($relayErr) && !empty($relayErr['error'])) {
+                    $detail .= ': ' . $relayErr['error'];
+                }
+            }
             return [0, ['message' => 'Zentao relay unreachable: ' . $detail]];
         }
         $relayData = json_decode($resp, true);
