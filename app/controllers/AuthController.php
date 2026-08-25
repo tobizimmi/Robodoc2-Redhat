@@ -59,7 +59,8 @@ class AuthController
             }
         }
 
-        View::render('auth/login', ['title' => 'Anmelden'], 'auth');
+        $msSsoEnabled = appSetting('ms_sso_enabled') === '1' && appSetting('ms_tenant_id') && appSetting('ms_client_id');
+        View::render('auth/login', ['title' => 'Anmelden', 'msSsoEnabled' => $msSsoEnabled], 'auth');
     }
 
     /** 2FA verification step */
@@ -314,7 +315,7 @@ class AuthController
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-    private static function completeLogin(array $user, string $ip): void
+    public static function completeLogin(array $user, string $ip): void
     {
         session_regenerate_id(true); // Prevent session fixation
         try { Database::execute('DELETE FROM password_reset_tokens WHERE user_id=? AND used_at IS NULL', [$user['id']]); } catch (Throwable) {}
@@ -338,7 +339,7 @@ class AuthController
         return null;
     }
 
-    private static function clientIp(): string
+    public static function clientIp(): string
     {
         // Prefer real IP behind reverse proxy
         foreach (['HTTP_CF_CONNECTING_IP','HTTP_X_REAL_IP','HTTP_X_FORWARDED_FOR','REMOTE_ADDR'] as $h) {

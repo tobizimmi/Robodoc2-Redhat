@@ -19,6 +19,7 @@
     ['Settings', 'App name, Jira URL, entry type filters', 'gear', 'admin/settings', 'secondary'],
     ['Jira Settings', 'Templates, field mapping', 'plugin', 'admin/jira', 'warning'],
     ['Zentao Settings', 'URL, token, templates, mapping', 'diagram-3', 'admin/zentao', 'info'],
+    ['Microsoft SSO', 'Sign in with Microsoft (Entra ID)', 'microsoft', 'admin/microsoft-sso', 'primary'],
     ['Entry Types', 'Bug, Error, Feature Request…', 'tags', 'admin/entry-types', 'info'],
     ['Error Categories', 'Hardware, Software, Navigation…', 'exclamation-triangle', 'admin/categories', 'warning'],
     ['Custom Fields', 'Additional fields for entries', 'input-cursor-text', 'admin/custom-fields', 'success'],

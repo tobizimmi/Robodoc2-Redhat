@@ -11,6 +11,8 @@ $router = new Router();
 // -- Auth ------------------------------------------------
 $router->any('/login',                            [AuthController::class, 'login']);
 $router->any('/login/2fa',                        [AuthController::class, 'login2fa']);
+$router->get('/auth/microsoft',                   [MicrosoftAuthController::class, 'redirect']);
+$router->get('/auth/microsoft/callback',          [MicrosoftAuthController::class, 'callback']);
 $router->get('/profile/gdpr-export',                    [GdprController::class, 'export']);
 $router->any('/profile/2fa/setup',                [AuthController::class, 'setup2fa']);
 $router->get('/profile/2fa/qr',                          [AuthController::class, 'qrCode']);
@@ -271,6 +273,7 @@ $router->get('/admin/sync-review',                                        [SyncR
 $router->post('/admin/sync-review/{source}/{id}/{action}',                [SyncReviewController::class, 'entryAction']);
 $router->post('/admin/sync-review/{source}/bulk/{action}',                [SyncReviewController::class, 'bulkAction']);
 $router->any('/admin/zentao',        [AdminController::class, 'zentaoSettings']);
+$router->any('/admin/microsoft-sso', [AdminController::class, 'microsoftSsoSettings']);
 $router->any('/admin/entry-types',   [AdminController::class, 'entryTypes']);
 $router->post('/admin/entry-types/{id}/delete', [AdminController::class, 'deleteEntryType']);
 $router->any('/admin/categories',    [AdminController::class, 'categories']);

@@ -394,6 +394,41 @@ class AdminController {
         ]);
     }
 
+    // ── Microsoft SSO Settings ─────────────────────────────────
+    public static function microsoftSsoSettings(): void {
+        Auth::requireAdmin();
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            Auth::verifyCsrf();
+            Database::execute(
+                'INSERT INTO app_settings (setting_key, setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)',
+                ['ms_sso_enabled', !empty($_POST['ms_sso_enabled']) ? '1' : '0']
+            );
+            foreach (['ms_tenant_id', 'ms_client_id'] as $key) {
+                Database::execute(
+                    'INSERT INTO app_settings (setting_key, setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)',
+                    [$key, trim($_POST[$key] ?? '')]
+                );
+            }
+            // Client secret: leave the stored value untouched if the field was left empty
+            // (so re-saving the form doesn't require re-entering it every time).
+            $newSecret = trim($_POST['ms_client_secret'] ?? '');
+            if ($newSecret !== '') {
+                Database::execute(
+                    'INSERT INTO app_settings (setting_key, setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)',
+                    ['ms_client_secret', Encryption::encryptIfNeeded($newSecret)]
+                );
+            }
+            flash('success', 'Microsoft SSO settings saved.');
+            redirect('/admin/microsoft-sso');
+        }
+        $s = array_column(Database::fetchAll('SELECT * FROM app_settings'), 'setting_value', 'setting_key');
+        View::render('admin/microsoft-sso', [
+            'title'          => 'Microsoft SSO Settings',
+            's'              => $s,
+            'hasClientSecret'=> !empty($s['ms_client_secret']),
+        ]);
+    }
+
     // ── Entry Types ───────────────────────────────────────────
     public static function entryTypes(): void {
         Auth::requireAdmin();
