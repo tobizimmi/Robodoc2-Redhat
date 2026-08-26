@@ -16,14 +16,24 @@ class JiraController
         $isCloud  = str_contains($jiraUrl, 'atlassian.net');
         $titleTpl = appSetting('jira_default_title_template') ?: '[{{type}}] {{title}}';
         $descTpl  = appSetting('jira_default_desc_template')  ?: self::defaultDescTemplate();
+        $mappedPri = self::mapEntryPriority($entry);
         $body = ['fields' => [
             'project'     => ['key' => strtoupper($projectKey)],
             'summary'     => self::applyVars($titleTpl, $entry),
             'issuetype'   => ['name' => 'Bug'],
             'description' => self::descField(self::applyVars($descTpl, $entry), $isCloud),
         ]];
+        if ($mappedPri) $body['fields']['priority'] = ['name' => $mappedPri];
         self::applyFieldMapping($body, $entry);
         [$httpCode, $data] = self::jsonRequest('POST', "$apiBase/issue", $authHeader, $body);
+
+        // Same fallback as the manual create(): a priority name that doesn't exist in
+        // this project's scheme (or isn't on the create screen) makes Jira reject the
+        // whole request with 400 - retry without it rather than silently creating nothing.
+        if ($httpCode === 400 && $mappedPri) {
+            unset($body['fields']['priority']);
+            [$httpCode, $data] = self::jsonRequest('POST', "$apiBase/issue", $authHeader, $body);
+        }
         if (($httpCode === 201 || $httpCode === 200) && isset($data['key'])) {
             Database::execute(
                 'UPDATE entries SET jira_issue_key=?, jira_issue_url=?, jira_synced_at=NOW(), jira_has_changes=0 WHERE id=?',
