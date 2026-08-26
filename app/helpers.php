@@ -1488,3 +1488,24 @@ function runMigrationsReport(): array {
             }
         }
     }
+
+    // -- Migration: report_schedules table (automatischer Report-Versand)
+    Database::execute("CREATE TABLE IF NOT EXISTS report_schedules (
+        id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        template_id   INT UNSIGNED NOT NULL,
+        name          VARCHAR(150) NOT NULL,
+        recipients    TEXT NOT NULL COMMENT 'Comma-separated email addresses',
+        frequency     ENUM('daily','weekly','monthly') NOT NULL DEFAULT 'weekly',
+        day_of_week   TINYINT UNSIGNED NULL COMMENT '0=Sunday..6=Saturday, for weekly',
+        day_of_month  TINYINT UNSIGNED NULL COMMENT '1-28, for monthly',
+        time_of_day   TIME NOT NULL DEFAULT '08:00:00',
+        period_mode   ENUM('all','last_n_days') NOT NULL DEFAULT 'last_n_days',
+        period_days   INT UNSIGNED NULL DEFAULT 7,
+        project_id    INT UNSIGNED NULL,
+        type_ids      VARCHAR(200) NULL COMMENT 'comma-separated entry_type ids',
+        is_active     TINYINT(1) NOT NULL DEFAULT 1,
+        last_sent_at  DATETIME NULL,
+        created_by    INT UNSIGNED,
+        created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX (template_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");

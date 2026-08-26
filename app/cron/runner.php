@@ -50,6 +50,13 @@ $builtIn = [
         'script'       => 'zentao_sync.php',
         'interval_min' => 15,
     ],
+    [
+        'key'          => 'report_schedules',
+        'label'        => 'Report-Zeitpläne',
+        'description'  => 'Verschickt geplante Report-Builder-Berichte per E-Mail, sobald sie fällig sind.',
+        'script'       => 'report_schedules.php',
+        'interval_min' => 15,
+    ],
 ];
 
 foreach ($builtIn as $job) {

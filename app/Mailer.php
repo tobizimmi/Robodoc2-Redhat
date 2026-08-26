@@ -82,6 +82,21 @@ class Mailer
         }
     }
 
+    public static function sendScheduledReport(string $toEmail, string $tplName, string $reportUrl): void
+    {
+        $smtpHost = appSetting('smtp_host');
+        $fromAddr = appSetting('smtp_from', appSetting('smtp_user'));
+        if (!$smtpHost || !$fromAddr) return;
+
+        $subject = '[RoboDoc] Bericht: ' . $tplName;
+        $body  = "Der geplante Bericht \"$tplName\" ist bereit.\n\n";
+        $body .= "Bericht öffnen (Link gültig 14 Tage, kein Login nötig):\n$reportUrl\n\n";
+        $body .= "Im Browser öffnen und über den Druckdialog als PDF speichern.\n\n— RoboDoc\n";
+
+        self::send($toEmail, $toEmail, $fromAddr, $subject, $body,
+            $smtpHost, (int)appSetting('smtp_port', '587'), appSetting('smtp_user'), appSetting('smtp_pass'));
+    }
+
     private static function send(
         string $toEmail, string $toName, string $fromAddr,
         string $subject, string $body,

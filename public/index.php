@@ -427,6 +427,10 @@ $router->get('/reports/templates/{id}/preview',    [ReportController::class, 'ge
 $router->get('/reports/templates/{id}/report',   [ReportController::class, 'generateReport']);
 $router->post('/reports/templates/{id}/report',  [ReportController::class, 'generateReport']);
 $router->get('/reports/templates/{id}/pdf',        [ReportController::class, 'exportPdf']);
+$router->get('/reports/public/{token}',            [ReportController::class, 'publicView']);
+$router->get('/reports/templates/{id}/schedules',        [ReportController::class, 'listSchedules']);
+$router->post('/reports/templates/{id}/schedules',       [ReportController::class, 'saveSchedule']);
+$router->post('/reports/schedules/{id}/delete',           [ReportController::class, 'deleteSchedule']);
 $router->any('/reports',             [ReportController::class, 'index']);
 $router->get('/api/reports/firmware',[ReportController::class, 'firmwareComparison']);
 

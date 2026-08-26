@@ -1,8 +1,9 @@
 <?php
-$csrf    = Auth::csrfToken();
-$saveUrl = url('reports/templates/save');
-$baseUrl = url('reports/templates/');
-$repUrl  = url('reports');
+$csrf     = Auth::csrfToken();
+$saveUrl  = url('reports/templates/save');
+$baseUrl  = url('reports/templates/');
+$repUrl   = url('reports');
+$schedUrl = url('reports/schedules/');
 ?>
 
 <!-- ── Page header ─────────────────────────────────────────────────────────── -->
@@ -60,6 +61,10 @@ $repUrl  = url('reports');
                 data-id="<?= $tpl['id'] ?>"
                 data-name="<?= e($tpl['name']) ?>">
           <i class="bi bi-file-earmark-bar-graph me-1"></i>Bericht erstellen
+        </button>
+        <button class="btn btn-outline-info btn-sm w-100 mb-2 rd-sched-btn"
+                data-id="<?= $tpl['id'] ?>" data-name="<?= e($tpl['name']) ?>">
+          <i class="bi bi-alarm me-1"></i>Zeitplan (automatischer Versand)
         </button>
         <div class="d-flex gap-1">
           <button class="btn btn-outline-secondary btn-sm flex-grow-1 rd-edit-btn"
@@ -150,6 +155,102 @@ $repUrl  = url('reports');
           </button>
         </div>
       </form>
+    </div>
+  </div>
+</div>
+
+<!-- ── "Zeitplan" modal ────────────────────────────────────────────────────── -->
+<div class="modal fade" id="rdSchedModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title">
+          <i class="bi bi-alarm me-2 text-info"></i>
+          Zeitplan: <span id="rdSchedTplName"></span>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">
+          Automatischer Versand per E-Mail. Empfänger erhalten einen Link zum Bericht
+          (14 Tage gültig, kein RoboDoc-Login nötig) — kein PDF-Anhang.
+        </p>
+        <div id="rdSchedList" class="mb-3"></div>
+        <hr class="border-secondary">
+        <form id="rdSchedForm">
+          <input type="hidden" id="rdSchedId" value="">
+          <div class="row g-2 mb-2">
+            <div class="col-md-6">
+              <label class="form-label small">Name</label>
+              <input type="text" id="rdSchedName" class="form-control form-control-sm" placeholder="z.B. Wöchentlicher Statusbericht">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small">Empfänger <span class="text-muted">(Komma-getrennt)</span></label>
+              <input type="text" id="rdSchedRecipients" class="form-control form-control-sm" placeholder="a@firma.de, b@firma.de">
+            </div>
+          </div>
+          <div class="row g-2 mb-2">
+            <div class="col-md-4">
+              <label class="form-label small">Frequenz</label>
+              <select id="rdSchedFreq" class="form-select form-select-sm">
+                <option value="daily">Täglich</option>
+                <option value="weekly" selected>Wöchentlich</option>
+                <option value="monthly">Monatlich</option>
+              </select>
+            </div>
+            <div class="col-md-4" id="rdSchedDowWrap">
+              <label class="form-label small">Wochentag</label>
+              <select id="rdSchedDow" class="form-select form-select-sm">
+                <option value="1" selected>Montag</option><option value="2">Dienstag</option>
+                <option value="3">Mittwoch</option><option value="4">Donnerstag</option>
+                <option value="5">Freitag</option><option value="6">Samstag</option>
+                <option value="0">Sonntag</option>
+              </select>
+            </div>
+            <div class="col-md-4" id="rdSchedDomWrap" style="display:none">
+              <label class="form-label small">Tag im Monat</label>
+              <input type="number" id="rdSchedDom" class="form-control form-control-sm" min="1" max="28" value="1">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small">Uhrzeit</label>
+              <input type="time" id="rdSchedTime" class="form-control form-control-sm" value="08:00">
+            </div>
+          </div>
+          <div class="row g-2 mb-2">
+            <div class="col-md-4">
+              <label class="form-label small">Zeitraum</label>
+              <select id="rdSchedPeriodMode" class="form-select form-select-sm">
+                <option value="last_n_days" selected>Letzte N Tage</option>
+                <option value="all">Alle Einträge</option>
+              </select>
+            </div>
+            <div class="col-md-2" id="rdSchedPeriodDaysWrap">
+              <label class="form-label small">Tage</label>
+              <input type="number" id="rdSchedPeriodDays" class="form-control form-control-sm" min="1" value="7">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small">Projekt <span class="text-muted">(optional)</span></label>
+              <select id="rdSchedProject" class="form-select form-select-sm">
+                <option value="">Alle Projekte</option>
+                <?php foreach ($projects as $p): ?>
+                <option value="<?= $p['id'] ?>"><?= e($p['name']) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+          </div>
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="rdSchedActive" checked>
+            <label class="form-check-label small" for="rdSchedActive">Aktiv</label>
+          </div>
+          <div id="rdSchedErr" class="text-danger small mb-2" style="display:none"></div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-info btn-sm text-dark">
+              <i class="bi bi-floppy me-1"></i><span id="rdSchedSaveLbl">Zeitplan speichern</span>
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="rdSchedCancelEdit" style="display:none">Abbrechen</button>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
 </div>
@@ -310,10 +411,19 @@ var _rdDragType = null;
 var RD_STATUSES    = <?= json_encode(entryStatuses()) ?>;
 var RD_PRIORITIES  = ['Blocker','Highest','High','Medium','Low'];
 var RD_ENTRY_TYPES = <?= json_encode(array_values(array_column($entryTypes, 'name'))) ?>;
+var RD_TAGS         = <?= json_encode(array_values(array_column($tags, 'name'))) ?>;
 // Block types whose content is built from the entry list, so a per-block
 // filter (status/priority/type) makes sense on them — project_header/text/
 // divider/page_break don't consume entries directly.
-var RD_FILTERABLE = {summary:1,chart_type:1,chart_status:1,chart_priority:1,chart_firmware:1,table:1,top_issues:1,timeline:1};
+var RD_FILTERABLE = {summary:1,chart_type:1,chart_status:1,chart_priority:1,chart_firmware:1,table:1,top_issues:1,timeline:1,compare:1,chart_trend:1};
+// Block types that render one row per entry (vs. an aggregate), so a
+// per-block sort order makes sense on them.
+var RD_SORTABLE = {table:1,top_issues:1,timeline:1};
+// Chart block types that can optionally be split into one mini-chart per
+// project instead of one chart across all projects.
+var RD_GROUPABLE = {chart_type:1,chart_status:1,chart_priority:1,chart_firmware:1};
+// Block types with a default section title that can be overridden.
+var RD_TITLEABLE = {summary:1,chart_type:1,chart_status:1,chart_priority:1,chart_firmware:1,chart_trend:1,compare:1,table:1,top_issues:1,timeline:1};
 
 var RD_DEFS = {
   project_header: {l:'Projektinfo-Header',    i:'bi-building',             c:'#6366f1', d:'Projektname, Status, Beschreibung'},
@@ -322,6 +432,8 @@ var RD_DEFS = {
   chart_status:   {l:'Chart: Nach Status',     i:'bi-bar-chart',            c:'#f59e0b', d:'Statusverteilung'},
   chart_priority: {l:'Chart: Priorität',       i:'bi-exclamation-triangle', c:'#ef4444', d:'Prioritätsverteilung'},
   chart_firmware: {l:'Chart: Firmware',        i:'bi-cpu',                  c:'#8b5cf6', d:'Gruppiert nach Firmware-Version'},
+  chart_trend:    {l:'Chart: Verlauf',         i:'bi-graph-up',             c:'#06b6d4', d:'Einträge pro Woche als Linie'},
+  compare:        {l:'Vergleich zum Vorzeitraum', i:'bi-arrow-left-right',  c:'#eab308', d:'Aktueller vs. vorheriger Zeitraum'},
   table:          {l:'Eintrags-Tabelle',        i:'bi-table',                c:'#0d6efd', d:'Konfigurierbare Eintrags-Tabelle'},
   top_issues:     {l:'Top Issues',             i:'bi-fire',                 c:'#f97316', d:'Wichtigste Einträge nach Priorität'},
   timeline:       {l:'Timeline',               i:'bi-calendar-week',        c:'#06b6d4', d:'Chronologische Ansicht'},
@@ -612,17 +724,54 @@ function rdRenderCanvas(){
           +' title="Breite: '+opt.t+'">'+opt.l+'</button>';
       });
       body+='</div>';
+      // Freier Titel (überschreibt die Default-Überschrift des Blocks)
+      if(RD_TITLEABLE[b.type]){
+        body+='<div class="mb-2"><label class="rd-lbl">Titel (optional, überschreibt Standard)</label>'
+          +'<input type="text" class="form-control form-control-sm rdTitle" data-bid="'+b.id+'" value="'+rdEsc(b.cfg.title||'')+'"'
+          +' style="background:#1a1d23;color:#e5e7eb;border-color:#374151"></div>';
+      }
+      // Sortierung (nur für Blöcke, die einzelne Einträge auflisten)
+      if(RD_SORTABLE[b.type]){
+        var srt=b.cfg.sort||{};
+        body+='<div class="d-flex gap-2 align-items-center mb-2">'
+          +'<label class="rd-lbl mb-0" style="min-width:60px">Sortierung</label>'
+          +'<select class="form-select form-select-sm rdSortField" data-bid="'+b.id+'" style="width:auto;background:#1a1d23;color:#e5e7eb;border-color:#374151">'
+          +[['','Standard'],['entry_date','Datum'],['status','Status'],['priority','Priorität'],['title','Titel (A-Z)']].map(function(o){
+            return '<option value="'+o[0]+'"'+((srt.field||'')===o[0]?' selected':'')+'>'+o[1]+'</option>';
+          }).join('')
+          +'</select>'
+          +'<select class="form-select form-select-sm rdSortDir" data-bid="'+b.id+'" style="width:auto;background:#1a1d23;color:#e5e7eb;border-color:#374151"'+(srt.field?'':' disabled')+'>'
+          +'<option value="desc"'+((srt.dir||'desc')==='desc'?' selected':'')+'>Absteigend</option>'
+          +'<option value="asc"'+(srt.dir==='asc'?' selected':'')+'>Aufsteigend</option>'
+          +'</select></div>';
+      }
       // Block-specific extra options
       if(b.type==='summary'){
-        body+='<div style="display:flex;align-items:center;gap:8px"><label style="font-size:11px;color:#9ca3af">Kennzahlen pro Zeile:</label>'
+        body+='<div class="d-flex align-items-center gap-2 mb-2"><label style="font-size:11px;color:#9ca3af">Kennzahlen pro Zeile:</label>'
           +'<select class="form-select form-select-sm rdKpiCols" data-bid="'+b.id+'" style="width:60px;background:#1a1d23;color:#e5e7eb;border-color:#374151">'
           +[2,3,4].map(function(n){return '<option value="'+n+'"'+(kpiCols===n?' selected':'')+'>'+n+'</option>';}).join('')
           +'</select></div>';
+        var ths=b.cfg.thresholds||[];
+        var thFor=function(metric){ return ths.find(function(t){return t.metric===metric;})||{}; };
+        body+='<div class="rd-lbl">Schwellenwert-Highlighting <span style="opacity:.7">(Kachel wird rot, wenn Wert &gt; Zahl)</span></div>';
+        ['total','open','done','types'].forEach(function(metric){
+          var th=thFor(metric);
+          var mLbl={total:'Gesamt',open:'Offen',done:'Erledigt',types:'Typen'}[metric];
+          body+='<div class="d-flex gap-2 align-items-center mb-1">'
+            +'<span style="font-size:10px;color:#9ca3af;min-width:50px">'+mLbl+' &gt;</span>'
+            +'<input type="number" class="form-control form-control-sm rdThreshold" data-bid="'+b.id+'" data-metric="'+metric+'"'
+            +' value="'+(th.value!=null?th.value:'')+'" placeholder="—" style="width:70px;background:#1a1d23;color:#e5e7eb;border-color:#374151">'
+            +'</div>';
+        });
       }
-      if(b.type.indexOf('chart')===0){
-        body+='<div style="display:flex;align-items:center;gap:8px"><label style="font-size:11px;color:#9ca3af">Balkenhöhe (px):</label>'
+      if(b.type.indexOf('chart')===0 && b.type!=='chart_trend'){
+        body+='<div class="d-flex align-items-center gap-2 mb-2"><label style="font-size:11px;color:#9ca3af">Balkenhöhe (px):</label>'
           +'<input type="number" class="form-control form-control-sm rdBarH" data-bid="'+b.id+'" value="'+barHeight+'" min="10" max="40"'
           +' style="width:60px;background:#1a1d23;color:#e5e7eb;border-color:#374151"></div>';
+      }
+      if(RD_GROUPABLE[b.type]){
+        body+='<div class="form-check"><input class="form-check-input rdGroupByProject" type="checkbox" data-bid="'+b.id+'"'+(b.cfg.groupByProject?' checked':'')+'>'
+          +'<label class="form-check-label" style="font-size:11px;color:#d1d5db">Ein Mini-Chart pro Projekt statt einem Gesamt-Chart</label></div>';
       }
       body+='</div>';
     }
@@ -631,7 +780,7 @@ function rdRenderCanvas(){
     // of the report, which still uses the full entry set.
     if(RD_FILTERABLE[b.type]){
       var filt=b.cfg.filter||{};
-      var fSt=filt.statuses||[], fPr=filt.priorities||[], fTy=filt.types||[];
+      var fSt=filt.statuses||[], fPr=filt.priorities||[], fTy=filt.types||[], fTag=filt.tags||[];
       function rdChip(kind,val,label,active){
         return '<label class="rd-filter-chip" style="display:inline-flex;align-items:center;gap:3px;background:'+(active?'#6366f1':'#374151')+';'
           +'color:#fff;padding:2px 7px;border-radius:12px;font-size:10px;cursor:pointer;user-select:none">'
@@ -651,10 +800,33 @@ function rdRenderCanvas(){
       body+='</div>';
       if(RD_ENTRY_TYPES.length){
         body+='<div class="rd-lbl">Eintragstyp</div>';
-        body+='<div style="display:flex;flex-wrap:wrap;gap:4px">';
+        body+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">';
         RD_ENTRY_TYPES.forEach(function(t){ body+=rdChip('types',t,t,fTy.indexOf(t)>=0); });
         body+='</div>';
       }
+      if(RD_TAGS.length){
+        body+='<div class="rd-lbl">Tags</div>';
+        body+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">';
+        RD_TAGS.forEach(function(t){ body+=rdChip('tags',t,t,fTag.indexOf(t)>=0); });
+        body+='</div>';
+      }
+      body+='<div class="row g-2">';
+      body+='<div class="col-6"><label class="rd-lbl">Nur letzte N Tage <span style="opacity:.7">(leer = kein Limit)</span></label>'
+        +'<input type="number" class="form-control form-control-sm rdFiltDays" data-bid="'+b.id+'" min="1" value="'+(filt.relativeDays||'')+'"'
+        +' style="background:#1a1d23;color:#e5e7eb;border-color:#374151"></div>';
+      body+='<div class="col-3"><label class="rd-lbl">Jira</label>'
+        +'<select class="form-select form-select-sm rdFiltLink" data-bid="'+b.id+'" data-kind="jiraLink" style="background:#1a1d23;color:#e5e7eb;border-color:#374151">'
+        +'<option value=""'+(!filt.jiraLink?' selected':'')+'>Egal</option>'
+        +'<option value="has"'+(filt.jiraLink==='has'?' selected':'')+'>Hat Link</option>'
+        +'<option value="no"'+(filt.jiraLink==='no'?' selected':'')+'>Kein Link</option>'
+        +'</select></div>';
+      body+='<div class="col-3"><label class="rd-lbl">Zentao</label>'
+        +'<select class="form-select form-select-sm rdFiltLink" data-bid="'+b.id+'" data-kind="zentaoLink" style="background:#1a1d23;color:#e5e7eb;border-color:#374151">'
+        +'<option value=""'+(!filt.zentaoLink?' selected':'')+'>Egal</option>'
+        +'<option value="has"'+(filt.zentaoLink==='has'?' selected':'')+'>Hat Link</option>'
+        +'<option value="no"'+(filt.zentaoLink==='no'?' selected':'')+'>Kein Link</option>'
+        +'</select></div>';
+      body+='</div>';
       body+='</div>';
     }
     body+='</div>';
@@ -698,6 +870,65 @@ function rdRenderCanvas(){
       if(cb.checked){ if(idx<0)b.cfg.filter[kind].push(val); }
       else if(idx>=0){ b.cfg.filter[kind].splice(idx,1); }
       rdRenderCanvas(); rdUpdatePreview();
+    });
+  });
+  cv.querySelectorAll('.rdFiltDays').forEach(function(inp){
+    inp.addEventListener('change',function(){
+      var b=_rdBlocks.find(function(x){return x.id===+inp.dataset.bid;});
+      if(!b)return;
+      if(!b.cfg.filter)b.cfg.filter={};
+      b.cfg.filter.relativeDays = inp.value ? +inp.value : null;
+      rdUpdatePreview();
+    });
+  });
+  cv.querySelectorAll('.rdFiltLink').forEach(function(sel){
+    sel.addEventListener('change',function(){
+      var b=_rdBlocks.find(function(x){return x.id===+sel.dataset.bid;});
+      if(!b)return;
+      if(!b.cfg.filter)b.cfg.filter={};
+      b.cfg.filter[sel.dataset.kind] = sel.value || null;
+      rdUpdatePreview();
+    });
+  });
+  cv.querySelectorAll('.rdTitle').forEach(function(inp){
+    inp.addEventListener('input',function(){
+      var b=_rdBlocks.find(function(x){return x.id===+inp.dataset.bid;});
+      if(b){ b.cfg.title = inp.value; rdUpdatePreview(); }
+    });
+  });
+  cv.querySelectorAll('.rdSortField').forEach(function(sel){
+    sel.addEventListener('change',function(){
+      var b=_rdBlocks.find(function(x){return x.id===+sel.dataset.bid;});
+      if(!b)return;
+      if(!b.cfg.sort)b.cfg.sort={};
+      b.cfg.sort.field = sel.value || null;
+      rdRenderCanvas(); rdUpdatePreview();
+    });
+  });
+  cv.querySelectorAll('.rdSortDir').forEach(function(sel){
+    sel.addEventListener('change',function(){
+      var b=_rdBlocks.find(function(x){return x.id===+sel.dataset.bid;});
+      if(!b)return;
+      if(!b.cfg.sort)b.cfg.sort={};
+      b.cfg.sort.dir = sel.value;
+      rdUpdatePreview();
+    });
+  });
+  cv.querySelectorAll('.rdThreshold').forEach(function(inp){
+    inp.addEventListener('change',function(){
+      var b=_rdBlocks.find(function(x){return x.id===+inp.dataset.bid;});
+      if(!b)return;
+      if(!b.cfg.thresholds)b.cfg.thresholds=[];
+      var metric=inp.dataset.metric;
+      b.cfg.thresholds = b.cfg.thresholds.filter(function(t){return t.metric!==metric;});
+      if(inp.value!==''){ b.cfg.thresholds.push({metric:metric, op:'gt', value:+inp.value, color:'#ef4444'}); }
+      rdUpdatePreview();
+    });
+  });
+  cv.querySelectorAll('.rdGroupByProject').forEach(function(cb){
+    cb.addEventListener('change',function(){
+      var b=_rdBlocks.find(function(x){return x.id===+cb.dataset.bid;});
+      if(b){ b.cfg.groupByProject = cb.checked; rdUpdatePreview(); }
     });
   });
   cv.querySelectorAll('.rdColCb').forEach(function(cb){
@@ -863,12 +1094,17 @@ function rdUpdatePreview(){
     else if(b.type==='table') h+='<span style="color:#888;font-size:11px">Tabelle · max. '+(b.cfg.limit||50)+' Zeilen · Spalten: '+(b.cfg.columns||[]).join(', ')+'</span>';
     else if(b.type==='top_issues') h+='<span style="color:#888;font-size:11px">Top '+(b.cfg.limit||10)+' Issues nach Priorität</span>';
     else if(b.type==='timeline') h+='<span style="color:#888;font-size:11px">Chronologische Timeline</span>';
+    else if(b.type==='compare') h+='<span style="color:#888;font-size:11px">Vergleich zum Vorzeitraum (Gesamt/Offen, mit Delta)</span>';
     if(RD_FILTERABLE[b.type]){
       var pfilt=b.cfg.filter||{};
       var pfParts=[];
       if((pfilt.statuses||[]).length)   pfParts.push('Status: '+pfilt.statuses.map(function(s){return RD_STATUSES[s]||s;}).join(', '));
       if((pfilt.priorities||[]).length) pfParts.push('Prio: '+pfilt.priorities.join(', '));
       if((pfilt.types||[]).length)      pfParts.push('Typ: '+pfilt.types.join(', '));
+      if((pfilt.tags||[]).length)       pfParts.push('Tags: '+pfilt.tags.join(', '));
+      if(pfilt.relativeDays)            pfParts.push('Letzte '+pfilt.relativeDays+' Tage');
+      if(pfilt.jiraLink)                pfParts.push('Jira: '+(pfilt.jiraLink==='has'?'hat Link':'kein Link'));
+      if(pfilt.zentaoLink)              pfParts.push('Zentao: '+(pfilt.zentaoLink==='has'?'hat Link':'kein Link'));
       if(pfParts.length) h+='<div style="font-size:9px;color:#c2410c;margin-top:4px">🔍 '+rdEsc(pfParts.join(' · '))+'</div>';
     }
     h+='</div></div>';
@@ -902,6 +1138,95 @@ async function rdSave(){
     if(data.ok){_rdId=data.id;return true;}
     alert('Fehler: '+(data.error||'Unbekannt'));return false;
   }catch(err){alert('Fehler: '+err.message);return false;}
+}
+
+// ── Zeitplan (automatischer Versand) ────────────────────────────────────────
+var _rdSchedTplId = null;
+var RD_DOW_LABEL = {0:'Sonntag',1:'Montag',2:'Dienstag',3:'Mittwoch',4:'Donnerstag',5:'Freitag',6:'Samstag'};
+var RD_FREQ_LABEL = {daily:'Täglich',weekly:'Wöchentlich',monthly:'Monatlich'};
+
+function rdSchedResetForm(){
+  rdSv('rdSchedId',''); rdSv('rdSchedName',''); rdSv('rdSchedRecipients','');
+  rdSv('rdSchedFreq','weekly'); rdSv('rdSchedDow','1'); rdSv('rdSchedDom','1');
+  rdSv('rdSchedTime','08:00'); rdSv('rdSchedPeriodMode','last_n_days'); rdSv('rdSchedPeriodDays','7');
+  rdSv('rdSchedProject',''); rdSc('rdSchedActive',true);
+  document.getElementById('rdSchedSaveLbl').textContent='Zeitplan speichern';
+  document.getElementById('rdSchedCancelEdit').style.display='none';
+  document.getElementById('rdSchedErr').style.display='none';
+  rdSchedToggleFields();
+}
+
+function rdSchedToggleFields(){
+  var freq=rdGv('rdSchedFreq');
+  document.getElementById('rdSchedDowWrap').style.display = freq==='weekly' ? '' : 'none';
+  document.getElementById('rdSchedDomWrap').style.display = freq==='monthly' ? '' : 'none';
+  document.getElementById('rdSchedPeriodDaysWrap').style.display = rdGv('rdSchedPeriodMode')==='last_n_days' ? '' : 'none';
+}
+
+async function rdSchedLoad(tplId){
+  var list=document.getElementById('rdSchedList');
+  list.innerHTML='<div class="text-muted small">Lade…</div>';
+  try{
+    var res=await fetch('<?= $baseUrl ?>'+tplId+'/schedules');
+    var data=await res.json();
+    rdSchedRender(data.schedules||[]);
+  }catch(err){ list.innerHTML='<div class="text-danger small">Fehler beim Laden.</div>'; }
+}
+
+function rdSchedRender(rows){
+  var list=document.getElementById('rdSchedList');
+  if(!rows.length){ list.innerHTML='<div class="text-muted small">Noch kein Zeitplan angelegt.</div>'; return; }
+  list.innerHTML='';
+  rows.forEach(function(s){
+    var when = RD_FREQ_LABEL[s.frequency]||s.frequency;
+    if(s.frequency==='weekly'  && s.day_of_week!==null)  when += ', ' + (RD_DOW_LABEL[s.day_of_week]||'');
+    if(s.frequency==='monthly' && s.day_of_month!==null) when += ', Tag ' + s.day_of_month;
+    when += ' um ' + String(s.time_of_day||'').substring(0,5) + ' Uhr';
+    var period = s.period_mode==='all' ? 'alle Einträge' : ('letzte ' + s.period_days + ' Tage');
+    var row=document.createElement('div');
+    row.className='d-flex align-items-center gap-2 border border-secondary rounded p-2 mb-2';
+    row.innerHTML =
+      '<div class="flex-grow-1">'
+      +'<div class="small fw-semibold">'+rdEsc(s.name)+' '+(+s.is_active?'':'<span class="badge bg-secondary ms-1">inaktiv</span>')+'</div>'
+      +'<div class="small text-muted">'+rdEsc(when)+' · '+rdEsc(period)+' · an '+rdEsc(s.recipients)+'</div>'
+      +(s.last_sent_at?'<div class="small text-muted" style="font-size:10px">Zuletzt gesendet: '+rdEsc(s.last_sent_at)+'</div>':'')
+      +'</div>'
+      +'<button type="button" class="btn btn-outline-secondary btn-sm rdSchedEditBtn"><i class="bi bi-pencil"></i></button>'
+      +'<button type="button" class="btn btn-outline-danger btn-sm rdSchedDelBtn"><i class="bi bi-trash"></i></button>';
+    row.querySelector('.rdSchedEditBtn').addEventListener('click',function(){ rdSchedFillForm(s); });
+    row.querySelector('.rdSchedDelBtn').addEventListener('click',async function(){
+      if(!confirm('Zeitplan "'+s.name+'" löschen?')) return;
+      var fd=new FormData(); fd.append('_csrf','<?= $csrf ?>');
+      await fetch('<?= $schedUrl ?>'+s.id+'/delete',{method:'POST',body:fd});
+      rdSchedLoad(_rdSchedTplId);
+    });
+    list.appendChild(row);
+  });
+}
+
+function rdSchedFillForm(s){
+  rdSv('rdSchedId', s.id);
+  rdSv('rdSchedName', s.name);
+  rdSv('rdSchedRecipients', s.recipients);
+  rdSv('rdSchedFreq', s.frequency);
+  rdSv('rdSchedDow', s.day_of_week!==null ? s.day_of_week : 1);
+  rdSv('rdSchedDom', s.day_of_month!==null ? s.day_of_month : 1);
+  rdSv('rdSchedTime', String(s.time_of_day||'08:00:00').substring(0,5));
+  rdSv('rdSchedPeriodMode', s.period_mode);
+  rdSv('rdSchedPeriodDays', s.period_days||7);
+  rdSv('rdSchedProject', s.project_id||'');
+  rdSc('rdSchedActive', !!(+s.is_active));
+  document.getElementById('rdSchedSaveLbl').textContent='Änderungen speichern';
+  document.getElementById('rdSchedCancelEdit').style.display='';
+  rdSchedToggleFields();
+}
+
+function rdSchedOpen(tplId, tplName){
+  _rdSchedTplId = tplId;
+  document.getElementById('rdSchedTplName').textContent = tplName;
+  rdSchedResetForm();
+  rdSchedLoad(tplId);
+  new bootstrap.Modal(document.getElementById('rdSchedModal')).show();
 }
 
 // ── Wire up ───────────────────────────────────────────────────────────────────
@@ -957,6 +1282,42 @@ document.addEventListener('DOMContentLoaded', function(){
     var form=document.getElementById('rdGenForm');
     if(this.checked) form.action=form.action.split('?')[0]+'?autoprint=1';
     else form.action=form.action.split('?')[0];
+  });
+
+  // "Zeitplan" buttons
+  document.querySelectorAll('.rd-sched-btn').forEach(function(btn){
+    btn.addEventListener('click',function(){ rdSchedOpen(btn.dataset.id, btn.dataset.name); });
+  });
+  document.getElementById('rdSchedFreq').addEventListener('change', rdSchedToggleFields);
+  document.getElementById('rdSchedPeriodMode').addEventListener('change', rdSchedToggleFields);
+  document.getElementById('rdSchedCancelEdit').addEventListener('click', rdSchedResetForm);
+  document.getElementById('rdSchedForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    var errEl=document.getElementById('rdSchedErr');
+    errEl.style.display='none';
+    var name=rdGv('rdSchedName').trim(), recipients=rdGv('rdSchedRecipients').trim();
+    if(!name || !recipients){ errEl.textContent='Name und Empfänger sind Pflichtfelder.'; errEl.style.display=''; return; }
+    var fd=new FormData();
+    fd.append('_csrf','<?= $csrf ?>');
+    fd.append('name', name);
+    fd.append('recipients', recipients);
+    fd.append('frequency', rdGv('rdSchedFreq'));
+    fd.append('day_of_week', rdGv('rdSchedDow'));
+    fd.append('day_of_month', rdGv('rdSchedDom'));
+    fd.append('time_of_day', rdGv('rdSchedTime'));
+    fd.append('period_mode', rdGv('rdSchedPeriodMode'));
+    fd.append('period_days', rdGv('rdSchedPeriodDays'));
+    fd.append('project_id', rdGv('rdSchedProject'));
+    fd.append('is_active', rdGc('rdSchedActive') ? '1' : '0');
+    var schedId=rdGv('rdSchedId');
+    if(schedId) fd.append('schedule_id', schedId);
+    try{
+      var res=await fetch('<?= $baseUrl ?>'+_rdSchedTplId+'/schedules',{method:'POST',body:fd});
+      var data=await res.json();
+      if(!data.ok){ errEl.textContent=data.error||'Unbekannter Fehler.'; errEl.style.display=''; return; }
+      rdSchedResetForm();
+      rdSchedLoad(_rdSchedTplId);
+    }catch(err){ errEl.textContent='Fehler: '+err.message; errEl.style.display=''; }
   });
 
   // Config → live preview

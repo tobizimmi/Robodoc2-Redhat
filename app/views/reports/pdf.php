@@ -14,6 +14,8 @@ $project    = $data['project']    ?? null;
 $byType     = $data['byType']     ?? [];
 $byStatus   = $data['byStatus']   ?? [];
 $byFirmware = $data['byFirmware'] ?? [];
+$trendData  = $data['trend']      ?? [];
+$prevPeriod = $data['prev']       ?? null;
 
 $total  = count($entries);
 $openSt = ['new','open','internal','reviewed','pending_at_supplier','ready_for_test'];
@@ -39,20 +41,82 @@ $priorityColors = ['Blocker'=>'#7f1d1d','Highest'=>'#dc2626','High'=>'#f97316','
 
 // Per-block filter: each block can optionally narrow the shared $entries down to
 // its own subset (e.g. "only New/ToDo" for one chart while the table below still
-// shows everything) via $bcfg['filter'] = {statuses:[], priorities:[], types:[]}.
-// Applied against the already-fetched $entries array (not a fresh SQL query) so
-// it works identically for every block type without touching the controller.
+// shows everything) via $bcfg['filter'] = {statuses, priorities, types, tags,
+// relativeDays, jiraLink, zentaoLink}. Applied against the already-fetched
+// $entries array (not a fresh SQL query) so it works identically for every
+// block type without touching the controller.
 function rdFilterEntries(array $entries, array $bcfg): array {
     $f = $bcfg['filter'] ?? null;
-    if (empty($f) || (empty($f['statuses']) && empty($f['priorities']) && empty($f['types']))) {
-        return $entries;
-    }
-    return array_values(array_filter($entries, function($e) use ($f) {
+    if (empty($f)) return $entries;
+    $hasAny = !empty($f['statuses']) || !empty($f['priorities']) || !empty($f['types'])
+        || !empty($f['tags']) || !empty($f['relativeDays']) || !empty($f['jiraLink']) || !empty($f['zentaoLink']);
+    if (!$hasAny) return $entries;
+
+    $cutoff = !empty($f['relativeDays']) ? date('Y-m-d', strtotime('-' . (int)$f['relativeDays'] . ' days')) : null;
+
+    return array_values(array_filter($entries, function($e) use ($f, $cutoff) {
         if (!empty($f['statuses'])   && !in_array($e['status'] ?? '', $f['statuses'], true))       return false;
         if (!empty($f['priorities']) && !in_array($e['priority'] ?? '', $f['priorities'], true))    return false;
         if (!empty($f['types'])      && !in_array($e['type_name'] ?? '', $f['types'], true))        return false;
+        if (!empty($f['tags'])) {
+            $entryTags = array_map('trim', explode(',', $e['tag_names'] ?? ''));
+            if (!array_intersect($f['tags'], $entryTags)) return false;
+        }
+        if ($cutoff !== null && ($e['entry_date'] ?? '') < $cutoff) return false;
+        if (!empty($f['jiraLink'])) {
+            $hasJira = !empty($e['jira_issue_key']);
+            if ($f['jiraLink'] === 'has' && !$hasJira) return false;
+            if ($f['jiraLink'] === 'no'  && $hasJira)  return false;
+        }
+        if (!empty($f['zentaoLink'])) {
+            $hasZentao = !empty($e['zentao_bug_id']);
+            if ($f['zentaoLink'] === 'has' && !$hasZentao) return false;
+            if ($f['zentaoLink'] === 'no'  && $hasZentao)  return false;
+        }
         return true;
     }));
+}
+
+// Groups entries into chart rows (label => count), optionally split into one
+// sub-group per project (bcfg['groupByProject']) for a "mini chart per project"
+// view instead of one chart across all projects.
+function rdChartRows(array $entries, string $field, bool $groupByProject, ?string $colorEntryField, array $colorMap, string $fallbackColor): array {
+    $buckets = [];
+    foreach ($entries as $e) {
+        $key = $e[$field] ?? '–';
+        if ($field === 'firmware_version' && $key === '') continue;
+        $proj = $groupByProject ? ($e['project_name'] ?: '–') : '';
+        if (!isset($buckets[$proj])) $buckets[$proj] = [];
+        if (!isset($buckets[$proj][$key])) {
+            $color = $colorMap[$key] ?? ($colorEntryField ? ($e[$colorEntryField] ?? $fallbackColor) : $fallbackColor);
+            $buckets[$proj][$key] = ['label' => $key, 'cnt' => 0, 'color' => $color];
+        }
+        $buckets[$proj][$key]['cnt']++;
+    }
+    $out = [];
+    foreach ($buckets as $proj => $rows) {
+        $rowsArr = array_values($rows);
+        usort($rowsArr, fn($a, $b) => $b['cnt'] <=> $a['cnt']);
+        $out[] = ['project' => $proj, 'rows' => $rowsArr];
+    }
+    return $out;
+}
+
+// Per-block sort: overrides each block type's built-in default ordering
+// (table/timeline = entry_date desc, top_issues = priority) when configured
+// via $bcfg['sort'] = {field: 'entry_date'|'status'|'priority'|'title', dir: 'asc'|'desc'}.
+function rdSortEntries(array $entries, array $bcfg): array {
+    $sort = $bcfg['sort'] ?? null;
+    if (empty($sort['field'])) return $entries;
+    $field = $sort['field'];
+    $dir   = ($sort['dir'] ?? 'desc') === 'asc' ? 1 : -1;
+    $prioOrder = ['Blocker'=>0,'Highest'=>1,'High'=>2,'Medium'=>3,'Low'=>4];
+    usort($entries, function($a, $b) use ($field, $dir, $prioOrder) {
+        $av = $field === 'priority' ? ($prioOrder[$a['priority'] ?? ''] ?? 9) : ($a[$field] ?? '');
+        $bv = $field === 'priority' ? ($prioOrder[$b['priority'] ?? ''] ?? 9) : ($b[$field] ?? '');
+        return $dir * ($av <=> $bv);
+    });
+    return $entries;
 }
 
 // Default column widths (out of 12 units)
@@ -285,8 +349,10 @@ if ($curRow) $blockRows[] = $curRow;
   $bw    = $bcfg['width'] ?? 'full';
   $barH  = max(8,  min(32, (int)($bcfg['barHeight'] ?? 12)));
   $kpiCols = max(2, min(4, (int)($bcfg['kpiCols'] ?? 4)));
-  $blkEntries = rdFilterEntries($entries, $bcfg);
-  $blkFiltered = $blkEntries !== $entries;
+  $blkEntriesFiltered = rdFilterEntries($entries, $bcfg);
+  $blkFiltered = $blkEntriesFiltered !== $entries;
+  $blkEntries  = rdSortEntries($blkEntriesFiltered, $bcfg);
+  $blkTitle = trim($bcfg['title'] ?? '');
 ?>
 <div class="block-col w-<?= htmlspecialchars($bw) ?>">
 
@@ -332,41 +398,66 @@ if ($curRow) $blockRows[] = $curRow;
   $sOpen  = count(array_filter($blkEntries, fn($e) => in_array($e['status']??'', $openSt)));
   $sDone  = count(array_filter($blkEntries, fn($e) => in_array($e['status']??'', $doneSt)));
   $sTypes = count(array_unique(array_filter(array_column($blkEntries,'type_name'))));
+  $kpiValues = ['total'=>$sTotal,'open'=>$sOpen,'done'=>$sDone,'types'=>$sTypes];
+  $kpiColor = function(string $metric) use ($kpiValues, $bcfg, $primary) {
+      foreach (($bcfg['thresholds'] ?? []) as $t) {
+          if (($t['metric'] ?? '') !== $metric || !isset($t['value'])) continue;
+          $v = $kpiValues[$metric]; $th = (float)$t['value'];
+          $hit = ($t['op'] ?? 'gt') === 'lt' ? $v < $th : $v > $th;
+          if ($hit) return $t['color'] ?? '#ef4444';
+      }
+      return $primary;
+  };
 ?>
 <div class="section no-break">
-  <div class="section-title">Kennzahlen<?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Kennzahlen') ?><?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
   <div class="kpi-grid" style="grid-template-columns:repeat(<?= $kpiCols ?>,1fr)">
-    <div class="kpi-card"><div class="kpi-num"><?= $sTotal ?></div><div class="kpi-lbl">Gesamt</div></div>
-    <div class="kpi-card"><div class="kpi-num"><?= $sOpen ?></div><div class="kpi-lbl">Offen</div></div>
-    <div class="kpi-card"><div class="kpi-num"><?= $sDone ?></div><div class="kpi-lbl">Erledigt</div></div>
-    <div class="kpi-card"><div class="kpi-num"><?= $sTypes ?></div><div class="kpi-lbl">Typen</div></div>
+    <div class="kpi-card"><div class="kpi-num" style="color:<?= htmlspecialchars($kpiColor('total')) ?>"><?= $sTotal ?></div><div class="kpi-lbl">Gesamt</div></div>
+    <div class="kpi-card"><div class="kpi-num" style="color:<?= htmlspecialchars($kpiColor('open')) ?>"><?= $sOpen ?></div><div class="kpi-lbl">Offen</div></div>
+    <div class="kpi-card"><div class="kpi-num" style="color:<?= htmlspecialchars($kpiColor('done')) ?>"><?= $sDone ?></div><div class="kpi-lbl">Erledigt</div></div>
+    <div class="kpi-card"><div class="kpi-num" style="color:<?= htmlspecialchars($kpiColor('types')) ?>"><?= $sTypes ?></div><div class="kpi-lbl">Typen</div></div>
   </div>
 </div>
 
-<?php elseif ($btype === 'chart_type'): ?>
+<?php elseif (in_array($btype, ['chart_type','chart_status','chart_priority','chart_firmware'], true)): ?>
 <?php
-  if ($blkFiltered) {
-      $typeAgg = [];
-      foreach ($blkEntries as $e) {
-          $k = $e['type_name'] ?? '–';
-          if (!isset($typeAgg[$k])) $typeAgg[$k] = ['name'=>$k,'color'=>$e['type_color']??$primary,'cnt'=>0];
-          $typeAgg[$k]['cnt']++;
-      }
-      $typeRows = array_values($typeAgg);
-      usort($typeRows, fn($a,$b) => $b['cnt'] <=> $a['cnt']);
+  $groupByProject = !empty($bcfg['groupByProject']);
+  $chartSpecs = [
+      'chart_type'     => ['field'=>'type_name',        'colorField'=>'type_color', 'colorMap'=>[],              'fallback'=>$primary,   'title'=>'Nach Typ'],
+      'chart_status'   => ['field'=>'status',            'colorField'=>null,         'colorMap'=>$statusColors,   'fallback'=>'#6b7280',  'title'=>'Nach Status'],
+      'chart_priority' => ['field'=>'priority',          'colorField'=>null,         'colorMap'=>$priorityColors, 'fallback'=>'#6b7280',  'title'=>'Nach Priorität'],
+      'chart_firmware' => ['field'=>'firmware_version',  'colorField'=>null,         'colorMap'=>[],              'fallback'=>'#8b5cf6',  'title'=>'Nach Firmware'],
+  ][$btype];
+  // Only recompute from entries (capped at 1000) when we actually need a
+  // subset the SQL-based global aggregates can't give us (a block filter or
+  // the per-project grouping); otherwise keep using the exact, uncapped
+  // SQL aggregate for full accuracy on larger reports.
+  // chart_priority never had a SQL-side aggregate (always computed from the
+  // entry list), so it always goes through rdChartRows; the other three fall
+  // back to their exact, uncapped SQL aggregate when no filter/grouping is
+  // active — only recomputing from the (1000-row-capped) entries when a
+  // block filter or per-project grouping actually needs that granularity.
+  if ($btype === 'chart_priority' || $blkFiltered || $groupByProject) {
+      $groups = rdChartRows($blkEntries, $chartSpecs['field'], $groupByProject, $chartSpecs['colorField'], $chartSpecs['colorMap'], $chartSpecs['fallback']);
   } else {
-      $typeRows = $byType;
+      $precomputed = ['chart_type'=>$byType,'chart_status'=>$byStatus,'chart_firmware'=>$byFirmware][$btype];
+      $rows = array_map(fn($r) => [
+          'label' => $r['name'] ?? $r['status'] ?? $r['firmware_version'] ?? '–',
+          'cnt'   => $r['cnt'],
+          'color' => $r['color'] ?? ($chartSpecs['colorMap'][$r['status'] ?? ''] ?? $chartSpecs['fallback']),
+      ], $precomputed);
+      $groups = $rows ? [['project' => '', 'rows' => $rows]] : [];
   }
 ?>
-<?php if ($typeRows): ?>
+<?php foreach ($groups as $grp): if (!$grp['rows']) continue; ?>
 <div class="section">
-  <div class="section-title">Nach Typ<?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
-  <?php $max = max(array_column($typeRows,'cnt')?:[1]); ?>
-  <?php foreach ($typeRows as $row): ?>
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: $chartSpecs['title']) ?><?= $grp['project'] !== '' ? ' — ' . htmlspecialchars($grp['project']) : '' ?><?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
+  <?php $max = max(array_column($grp['rows'],'cnt')?:[1]); ?>
+  <?php foreach ($grp['rows'] as $row): ?>
   <div class="bar-row">
-    <div class="bar-lbl"><?= htmlspecialchars($row['name']??'–') ?></div>
+    <div class="bar-lbl"><?= htmlspecialchars($row['label']) ?></div>
     <div class="bar-track" style="height:<?= $barH ?>px">
-      <div class="bar-fill" style="width:<?= round($row['cnt']/$max*100) ?>%;background:<?= htmlspecialchars($row['color']??$primary) ?>">
+      <div class="bar-fill" style="width:<?= round($row['cnt']/$max*100) ?>%;background:<?= htmlspecialchars($row['color']) ?>">
         <?= $row['cnt'] > 2 ? $row['cnt'] : '' ?>
       </div>
     </div>
@@ -374,99 +465,7 @@ if ($curRow) $blockRows[] = $curRow;
   </div>
   <?php endforeach; ?>
 </div>
-<?php endif; ?>
-
-<?php elseif ($btype === 'chart_status'): ?>
-<?php
-  if ($blkFiltered) {
-      $statusAgg = [];
-      foreach ($blkEntries as $e) {
-          $k = $e['status'] ?? '–';
-          $statusAgg[$k] = ($statusAgg[$k] ?? 0) + 1;
-      }
-      arsort($statusAgg);
-      $statusRows = [];
-      foreach ($statusAgg as $st => $cnt) { $statusRows[] = ['status'=>$st,'cnt'=>$cnt]; }
-  } else {
-      $statusRows = $byStatus;
-  }
-?>
-<?php if ($statusRows): ?>
-<div class="section">
-  <div class="section-title">Nach Status<?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
-  <?php $max = max(array_column($statusRows,'cnt')?:[1]); ?>
-  <?php foreach ($statusRows as $row): ?>
-  <?php $sc = $statusColors[$row['status']??''] ?? '#6b7280'; ?>
-  <div class="bar-row">
-    <div class="bar-lbl"><?= htmlspecialchars($row['status']??'–') ?></div>
-    <div class="bar-track" style="height:<?= $barH ?>px">
-      <div class="bar-fill" style="width:<?= round($row['cnt']/$max*100) ?>%;background:<?= $sc ?>">
-        <?= $row['cnt'] > 2 ? $row['cnt'] : '' ?>
-      </div>
-    </div>
-    <div class="bar-val"><?= $row['cnt'] ?></div>
-  </div>
-  <?php endforeach; ?>
-</div>
-<?php endif; ?>
-
-<?php elseif ($btype === 'chart_priority'): ?>
-<?php
-  $byPrio = [];
-  foreach ($blkEntries as $e) { $p=$e['priority']??'–'; $byPrio[$p]=($byPrio[$p]??0)+1; }
-  arsort($byPrio); $maxP = max($byPrio?:[1]);
-?>
-<?php if ($byPrio): ?>
-<div class="section">
-  <div class="section-title">Nach Priorität<?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
-  <?php foreach ($byPrio as $prio => $cnt): ?>
-  <?php $pc = $priorityColors[$prio] ?? '#6b7280'; ?>
-  <div class="bar-row">
-    <div class="bar-lbl"><?= htmlspecialchars($prio) ?></div>
-    <div class="bar-track" style="height:<?= $barH ?>px">
-      <div class="bar-fill" style="width:<?= round($cnt/$maxP*100) ?>%;background:<?= $pc ?>">
-        <?= $cnt > 2 ? $cnt : '' ?>
-      </div>
-    </div>
-    <div class="bar-val"><?= $cnt ?></div>
-  </div>
-  <?php endforeach; ?>
-</div>
-<?php endif; ?>
-
-<?php elseif ($btype === 'chart_firmware'): ?>
-<?php
-  if ($blkFiltered) {
-      $fwAgg = [];
-      foreach ($blkEntries as $e) {
-          $fw = $e['firmware_version'] ?? '';
-          if ($fw === '') continue;
-          $fwAgg[$fw] = ($fwAgg[$fw] ?? 0) + 1;
-      }
-      arsort($fwAgg);
-      $fwRows = [];
-      foreach (array_slice($fwAgg, 0, 15, true) as $fw => $cnt) { $fwRows[] = ['firmware_version'=>$fw,'cnt'=>$cnt]; }
-  } else {
-      $fwRows = $byFirmware;
-  }
-?>
-<?php if ($fwRows): ?>
-<div class="section">
-  <div class="section-title">Nach Firmware<?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
-  <?php $max = max(array_column($fwRows,'cnt')?:[1]); ?>
-  <?php foreach ($fwRows as $row): ?>
-  <div class="bar-row">
-    <div class="bar-lbl"><?= htmlspecialchars($row['firmware_version']??'–') ?></div>
-    <div class="bar-track" style="height:<?= $barH ?>px">
-      <div class="bar-fill" style="width:<?= round($row['cnt']/$max*100) ?>%;background:#8b5cf6">
-        <?= $row['cnt'] > 2 ? $row['cnt'] : '' ?>
-      </div>
-    </div>
-    <div class="bar-val"><?= $row['cnt'] ?></div>
-  </div>
-  <?php endforeach; ?>
-</div>
-<?php endif; ?>
+<?php endforeach; ?>
 
 <?php elseif ($btype === 'table'): ?>
 <?php
@@ -499,7 +498,7 @@ if ($curRow) $blockRows[] = $curRow;
   $blkOrientClass = ($blkOrient === 'landscape') ? 'blk-landscape' : (($blkOrient === 'portrait') ? 'blk-portrait' : '');
 ?>
 <div class="section" style="page-break-before:auto;break-before:auto">
-  <div class="section-title">Einträge<?= $multiRow ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(mehrzeilig)</span>' : '' ?><?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Einträge') ?><?= $multiRow ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(mehrzeilig)</span>' : '' ?><?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
   <div class="tbl-wrap">
   <table>
     <colgroup>
@@ -604,13 +603,16 @@ if ($curRow) $blockRows[] = $curRow;
 <?php elseif ($btype === 'top_issues'): ?>
 <?php
   $lim  = (int)($bcfg['limit'] ?? 10);
-  $pmap = ['Highest'=>0,'High'=>1,'Medium'=>2,'Low'=>3];
   $sorted = $blkEntries;
-  usort($sorted, fn($a,$b) => ($pmap[$a['priority']??'']??9) <=> ($pmap[$b['priority']??'']??9));
+  if (empty($bcfg['sort']['field'])) {
+      // Default (no explicit per-block sort chosen): priority, most severe first.
+      $pmap = ['Blocker'=>-1,'Highest'=>0,'High'=>1,'Medium'=>2,'Low'=>3];
+      usort($sorted, fn($a,$b) => ($pmap[$a['priority']??'']??9) <=> ($pmap[$b['priority']??'']??9));
+  }
   $top = array_slice($sorted, 0, $lim);
 ?>
 <div class="section">
-  <div class="section-title">Top <?= $lim ?> Issues<?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: ('Top ' . $lim . ' Issues')) ?><?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
   <table style="table-layout:auto">
     <thead><tr>
       <th style="width:24px">#</th><th>Titel</th>
@@ -640,7 +642,7 @@ if ($curRow) $blockRows[] = $curRow;
 
 <?php elseif ($btype === 'timeline'): ?>
 <div class="section">
-  <div class="section-title">Timeline<?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Timeline') ?><?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
   <?php
     $grouped = []; foreach ($blkEntries as $e) $grouped[$e['entry_date']][] = $e;
     krsort($grouped); $shown = 0; $maxTl = (int)($bcfg['limit'] ?? 50);
@@ -675,6 +677,95 @@ if ($curRow) $blockRows[] = $curRow;
 <div class="section">
   <div class="text-block"><?= nl2br(htmlspecialchars($bcfg['text'])) ?></div>
 </div>
+
+<?php elseif ($btype === 'compare'): ?>
+<?php if ($prevPeriod): ?>
+<?php
+  $curTotal = count($blkEntries);
+  $curOpen  = count(array_filter($blkEntries, fn($e) => in_array($e['status']??'', $openSt)));
+  $rdDelta  = function(int $cur, int $prev): array {
+      $diff = $cur - $prev;
+      $pct  = $prev > 0 ? round($diff / $prev * 100) : ($cur > 0 ? 100 : 0);
+      return ['diff' => $diff, 'pct' => $pct];
+  };
+  $dTotal = $rdDelta($curTotal, $prevPeriod['total']);
+  $dOpen  = $rdDelta($curOpen, $prevPeriod['open']);
+  $rdArrow = fn($d) => $d['diff'] > 0 ? '▲' : ($d['diff'] < 0 ? '▼' : '–');
+  $rdColor = fn($d) => $d['diff'] > 0 ? '#ef4444' : ($d['diff'] < 0 ? '#22c55e' : '#6b7280');
+?>
+<div class="section no-break">
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Vergleich zum Vorzeitraum') ?></div>
+  <div style="font-size:9px;color:#9ca3af;margin-bottom:6px">Vorzeitraum: <?= htmlspecialchars($prevPeriod['from']) ?> – <?= htmlspecialchars($prevPeriod['to']) ?></div>
+  <div class="kpi-grid" style="grid-template-columns:repeat(2,1fr)">
+    <div class="kpi-card">
+      <div class="kpi-num"><?= $curTotal ?></div>
+      <div class="kpi-lbl">Gesamt</div>
+      <div style="font-size:10px;font-weight:700;color:<?= $rdColor($dTotal) ?>;margin-top:3px">
+        <?= $rdArrow($dTotal) ?> <?= $dTotal['diff'] >= 0 ? '+' : '' ?><?= $dTotal['diff'] ?> (<?= $dTotal['pct'] >= 0 ? '+' : '' ?><?= $dTotal['pct'] ?>%) ggü. <?= $prevPeriod['total'] ?>
+      </div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-num"><?= $curOpen ?></div>
+      <div class="kpi-lbl">Offen</div>
+      <div style="font-size:10px;font-weight:700;color:<?= $rdColor($dOpen) ?>;margin-top:3px">
+        <?= $rdArrow($dOpen) ?> <?= $dOpen['diff'] >= 0 ? '+' : '' ?><?= $dOpen['diff'] ?> (<?= $dOpen['pct'] >= 0 ? '+' : '' ?><?= $dOpen['pct'] ?>%) ggü. <?= $prevPeriod['open'] ?>
+      </div>
+    </div>
+  </div>
+</div>
+<?php else: ?>
+<div class="section" style="background:#fff3cd;padding:9px 12px;border-radius:5px;font-size:10px;color:#856404">
+  ⚠ Vergleichs-Block braucht einen konkreten Zeitraum (Datum von/bis) im Bericht.
+</div>
+<?php endif; ?>
+
+<?php elseif ($btype === 'chart_trend'): ?>
+<?php
+  if ($blkFiltered) {
+      $trendAgg = [];
+      foreach ($blkEntries as $e) {
+          $d = $e['entry_date'] ?? '';
+          if (!$d) continue;
+          $wk = date('o-\WW', strtotime($d));
+          if (!isset($trendAgg[$wk])) $trendAgg[$wk] = ['wk_start' => $d, 'cnt' => 0];
+          if ($d < $trendAgg[$wk]['wk_start']) $trendAgg[$wk]['wk_start'] = $d;
+          $trendAgg[$wk]['cnt']++;
+      }
+      ksort($trendAgg);
+      $trendRows = array_values($trendAgg);
+  } else {
+      $trendRows = $trendData;
+  }
+?>
+<?php if ($trendRows): ?>
+<div class="section">
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Verlauf (pro Woche)') ?><?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
+  <?php
+    $tw = 600; $th = 110; $pad = 8;
+    $maxCnt = max(array_column($trendRows, 'cnt') ?: [1]);
+    $n = count($trendRows);
+    $stepX = $n > 1 ? ($tw - 2 * $pad) / ($n - 1) : 0;
+    $pts = [];
+    foreach ($trendRows as $i => $row) {
+        $x = $pad + $i * $stepX;
+        $y = $th - $pad - ($maxCnt > 0 ? ($row['cnt'] / $maxCnt) * ($th - 2 * $pad) : 0);
+        $pts[] = [round($x, 1), round($y, 1)];
+    }
+    $ptsStr = implode(' ', array_map(fn($p) => $p[0] . ',' . $p[1], $pts));
+  ?>
+  <svg viewBox="0 0 <?= $tw ?> <?= $th ?>" style="width:100%;height:<?= $th ?>px;overflow:visible">
+    <polyline points="<?= $ptsStr ?>" fill="none" stroke="<?= htmlspecialchars($primary) ?>" stroke-width="2"></polyline>
+    <?php foreach ($pts as $i => $p): ?>
+    <circle cx="<?= $p[0] ?>" cy="<?= $p[1] ?>" r="2.5" fill="<?= htmlspecialchars($primary) ?>"></circle>
+    <?php endforeach; ?>
+  </svg>
+  <div style="display:flex;justify-content:space-between;font-size:8px;color:#9ca3af;margin-top:2px">
+    <?php foreach ($trendRows as $row): ?>
+    <span><?= date('d.m.', strtotime($row['wk_start'])) ?></span>
+    <?php endforeach; ?>
+  </div>
+</div>
+<?php endif; ?>
 
 <?php endif; ?>
 
