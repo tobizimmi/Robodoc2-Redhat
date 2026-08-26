@@ -1304,6 +1304,19 @@ function getMigrations(): array {
             INDEX idx_8datt_report_disc (report_id, discipline),
             CONSTRAINT fk_8datt_report FOREIGN KEY (report_id) REFERENCES eight_d_reports(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        // Live-Sync: push newly created entries to another RoboDoc2 instance
+        "ALTER TABLE entries ADD COLUMN IF NOT EXISTS live_origin_id INT UNSIGNED NULL DEFAULT NULL COMMENT 'entries.id on the sending instance, for idempotent re-sends'",
+        "ALTER TABLE entries ADD UNIQUE INDEX IF NOT EXISTS uq_entries_live_origin (live_origin_id)",
+        "CREATE TABLE IF NOT EXISTS live_sync_queue (
+            id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            entry_id   INT UNSIGNED NOT NULL,
+            status     ENUM('pending','sent','failed') NOT NULL DEFAULT 'pending',
+            attempts   INT UNSIGNED NOT NULL DEFAULT 0,
+            last_error TEXT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            sent_at    DATETIME NULL,
+            INDEX idx_lsq_status (status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
     ];
 }
 

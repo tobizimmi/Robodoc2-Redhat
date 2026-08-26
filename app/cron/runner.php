@@ -57,6 +57,13 @@ $builtIn = [
         'script'       => 'report_schedules.php',
         'interval_min' => 15,
     ],
+    [
+        'key'          => 'live_sync_retry',
+        'label'        => 'Live-Sync Retry',
+        'description'  => 'Versucht fehlgeschlagene oder unerreichbare Live-Sync-Übertragungen erneut.',
+        'script'       => 'live_sync.php',
+        'interval_min' => 15,
+    ],
 ];
 
 foreach ($builtIn as $job) {

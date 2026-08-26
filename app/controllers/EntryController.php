@@ -648,6 +648,10 @@ class EntryController {
                 self::handleUploads($id, $_FILES['files']);
             }
 
+            // Live-Sync: push to another RoboDoc2 instance, if configured (no-op otherwise).
+            // Attachments are already saved above, so they're included in the push.
+            try { LiveSyncController::pushEntry($id); } catch (Throwable) {}
+
             // Email notification
             try {
                 $fullEntry = self::findOr404($id);

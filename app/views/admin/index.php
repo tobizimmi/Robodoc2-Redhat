@@ -20,6 +20,7 @@
     ['Jira Settings', 'Templates, field mapping', 'plugin', 'admin/jira', 'warning'],
     ['Zentao Settings', 'URL, token, templates, mapping', 'diagram-3', 'admin/zentao', 'info'],
     ['Microsoft SSO', 'Sign in with Microsoft (Entra ID)', 'microsoft', 'admin/microsoft-sso', 'primary'],
+    ['Live-Sync', 'Neue Einträge automatisch an ein anderes RoboDoc2-System übertragen', 'arrow-left-right', 'admin/live-sync', 'purple'],
     ['Entry Types', 'Bug, Error, Feature Request…', 'tags', 'admin/entry-types', 'info'],
     ['Error Categories', 'Hardware, Software, Navigation…', 'exclamation-triangle', 'admin/categories', 'warning'],
     ['Custom Fields', 'Additional fields for entries', 'input-cursor-text', 'admin/custom-fields', 'success'],

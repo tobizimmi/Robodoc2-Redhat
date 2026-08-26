@@ -448,6 +448,41 @@ class AdminController {
         ]);
     }
 
+    // ── Live-Sync (push newly created entries to another RoboDoc2 instance) ──
+    public static function liveSyncSettings(): void {
+        Auth::requireAdmin();
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            Auth::verifyCsrf();
+            Database::execute(
+                'INSERT INTO app_settings (setting_key, setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)',
+                ['live_sync_target_url', trim($_POST['live_sync_target_url'] ?? '')]
+            );
+            Database::execute(
+                'INSERT INTO app_settings (setting_key, setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)',
+                ['live_sync_source_host', trim($_POST['live_sync_source_host'] ?? '')]
+            );
+            // Secret: leave the stored value untouched if the field was left empty. The
+            // SAME value must be entered on both instances — it's used both when this
+            // instance pushes (as the Bearer token) and when it receives (to verify one).
+            $newSecret = trim($_POST['live_sync_secret'] ?? '');
+            if ($newSecret !== '') {
+                Database::execute(
+                    'INSERT INTO app_settings (setting_key, setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)',
+                    ['live_sync_secret', Encryption::encryptIfNeeded($newSecret)]
+                );
+            }
+            flash('success', 'Live-Sync settings saved.');
+            redirect('/admin/live-sync');
+        }
+        $s = array_column(Database::fetchAll('SELECT * FROM app_settings'), 'setting_value', 'setting_key');
+        View::render('admin/live-sync', [
+            'title'        => 'Live-Sync Settings',
+            's'            => $s,
+            'hasSecret'    => !empty($s['live_sync_secret']),
+            'ingestUrl'    => rtrim(appSetting('app_url', ''), '/') . BASE_URL . '/api/sync/entry',
+        ]);
+    }
+
     // ── Entry Types ───────────────────────────────────────────
     public static function entryTypes(): void {
         Auth::requireAdmin();

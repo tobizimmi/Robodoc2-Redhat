@@ -274,6 +274,7 @@ $router->post('/admin/sync-review/{source}/{id}/{action}',                [SyncR
 $router->post('/admin/sync-review/{source}/bulk/{action}',                [SyncReviewController::class, 'bulkAction']);
 $router->any('/admin/zentao',        [AdminController::class, 'zentaoSettings']);
 $router->any('/admin/microsoft-sso', [AdminController::class, 'microsoftSsoSettings']);
+$router->any('/admin/live-sync',     [AdminController::class, 'liveSyncSettings']);
 $router->any('/admin/entry-types',   [AdminController::class, 'entryTypes']);
 $router->post('/admin/entry-types/{id}/delete', [AdminController::class, 'deleteEntryType']);
 $router->any('/admin/categories',    [AdminController::class, 'categories']);
@@ -433,6 +434,10 @@ $router->post('/reports/templates/{id}/schedules',       [ReportController::clas
 $router->post('/reports/schedules/{id}/delete',           [ReportController::class, 'deleteSchedule']);
 $router->any('/reports',             [ReportController::class, 'index']);
 $router->get('/api/reports/firmware',[ReportController::class, 'firmwareComparison']);
+
+// -- Live-Sync (push newly created entries to another RoboDoc2 instance) ---
+$router->post('/api/sync/entry',                [LiveSyncController::class, 'receiveEntry']);
+$router->get('/api/sync/attachment/{token}',    [LiveSyncController::class, 'attachmentDownload']);
 
 // -- Robots (per-robot history) ----------------------------
 $router->get('/robots',                                    [RobotController::class, 'index']);
