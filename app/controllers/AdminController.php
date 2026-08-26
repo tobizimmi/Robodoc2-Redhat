@@ -729,7 +729,7 @@ class AdminController {
     public static function cronJobs(): void {
         Auth::requireAdmin();
         // Ensure table + seed
-        require_once APP_ROOT . '/app/cron/runner.php';
+        require_once dirname(__DIR__) . '/cron/runner.php';
         $jobs = Database::fetchAll("SELECT * FROM cron_jobs ORDER BY label");
         View::render('admin/cron', compact('jobs'), 'app', ['title' => 'Cron Jobs']);
     }
@@ -743,7 +743,7 @@ class AdminController {
             "UPDATE cron_jobs SET is_active=? WHERE id=?",
             [$job['is_active'] ? 0 : 1, (int)$id]
         );
-        redirect('admin/cron');
+        redirect('/admin/cron');
     }
 
     public static function cronInterval(string $id): void {
@@ -754,6 +754,6 @@ class AdminController {
             "UPDATE cron_jobs SET interval_min=? WHERE id=?",
             [$min, (int)$id]
         );
-        redirect('admin/cron');
+        redirect('/admin/cron');
     }
 }

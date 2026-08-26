@@ -256,6 +256,9 @@ $router->get('/export/entries',      [ExportController::class, 'entries']);
 
 // -- Admin -------------------------------------------------
 $router->get('/admin',               [AdminController::class, 'index']);
+$router->get('/admin/cron',                       [AdminController::class, 'cronJobs']);
+$router->post('/admin/cron/{id}/toggle',          [AdminController::class, 'cronToggle']);
+$router->post('/admin/cron/{id}/interval',        [AdminController::class, 'cronInterval']);
 $router->get('/admin/users',                      [AdminController::class, 'users']);
 $router->any('/admin/users/create',              [AdminController::class, 'createUser']);
 $router->any('/admin/users/{id}/edit',           [AdminController::class, 'editUser']);
