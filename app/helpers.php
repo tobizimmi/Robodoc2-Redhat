@@ -1317,6 +1317,13 @@ function getMigrations(): array {
             sent_at    DATETIME NULL,
             INDEX idx_lsq_status (status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        "CREATE TABLE IF NOT EXISTS live_sync_rate_log (
+            id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            ip_address VARCHAR(45) NOT NULL,
+            kind       ENUM('request','auth_fail') NOT NULL DEFAULT 'request',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_lsrl_ip_kind_time (ip_address, kind, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
     ];
 }
 

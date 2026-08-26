@@ -448,22 +448,24 @@ class AdminController {
         ]);
     }
 
-    // ── Live-Sync (push newly created entries to another RoboDoc2 instance) ──
+    // ── Live-Sync (push/pull newly created entries to/from another RoboDoc2 instance) ──
     public static function liveSyncSettings(): void {
         Auth::requireAdmin();
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Auth::verifyCsrf();
             Database::execute(
                 'INSERT INTO app_settings (setting_key, setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)',
-                ['live_sync_target_url', trim($_POST['live_sync_target_url'] ?? '')]
+                ['live_sync_enabled', !empty($_POST['live_sync_enabled']) ? '1' : '0']
             );
-            Database::execute(
-                'INSERT INTO app_settings (setting_key, setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)',
-                ['live_sync_source_host', trim($_POST['live_sync_source_host'] ?? '')]
-            );
+            foreach (['live_sync_target_url', 'live_sync_pull_source_url', 'live_sync_source_host'] as $key) {
+                Database::execute(
+                    'INSERT INTO app_settings (setting_key, setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)',
+                    [$key, trim($_POST[$key] ?? '')]
+                );
+            }
             // Secret: leave the stored value untouched if the field was left empty. The
             // SAME value must be entered on both instances — it's used both when this
-            // instance pushes (as the Bearer token) and when it receives (to verify one).
+            // instance pushes/pulls (as the Bearer token) and when it receives (to verify one).
             $newSecret = trim($_POST['live_sync_secret'] ?? '');
             if ($newSecret !== '') {
                 Database::execute(
@@ -481,6 +483,19 @@ class AdminController {
             'hasSecret'    => !empty($s['live_sync_secret']),
             'ingestUrl'    => rtrim(appSetting('app_url', ''), '/') . BASE_URL . '/api/sync/entry',
         ]);
+    }
+
+    // -- One-click on/off, no need to open/resubmit the full settings form --
+    public static function liveSyncToggle(): void {
+        Auth::requireAdmin();
+        Auth::verifyCsrf();
+        $current = appSetting('live_sync_enabled') === '1';
+        Database::execute(
+            'INSERT INTO app_settings (setting_key, setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)',
+            ['live_sync_enabled', $current ? '0' : '1']
+        );
+        flash('success', $current ? 'Live-Sync deaktiviert.' : 'Live-Sync aktiviert.');
+        redirect('/admin/live-sync');
     }
 
     // ── Entry Types ───────────────────────────────────────────
