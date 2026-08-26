@@ -35,7 +35,25 @@ $statusColors = [
     'pending_at_supplier'=>'#f59e0b','ready_for_test'=>'#10b981',
     'finished'=>'#22c55e','finalized'=>'#22c55e','rejected'=>'#ef4444',
 ];
-$priorityColors = ['Highest'=>'#dc2626','High'=>'#f97316','Medium'=>'#3b82f6','Low'=>'#22c55e'];
+$priorityColors = ['Blocker'=>'#7f1d1d','Highest'=>'#dc2626','High'=>'#f97316','Medium'=>'#3b82f6','Low'=>'#22c55e'];
+
+// Per-block filter: each block can optionally narrow the shared $entries down to
+// its own subset (e.g. "only New/ToDo" for one chart while the table below still
+// shows everything) via $bcfg['filter'] = {statuses:[], priorities:[], types:[]}.
+// Applied against the already-fetched $entries array (not a fresh SQL query) so
+// it works identically for every block type without touching the controller.
+function rdFilterEntries(array $entries, array $bcfg): array {
+    $f = $bcfg['filter'] ?? null;
+    if (empty($f) || (empty($f['statuses']) && empty($f['priorities']) && empty($f['types']))) {
+        return $entries;
+    }
+    return array_values(array_filter($entries, function($e) use ($f) {
+        if (!empty($f['statuses'])   && !in_array($e['status'] ?? '', $f['statuses'], true))       return false;
+        if (!empty($f['priorities']) && !in_array($e['priority'] ?? '', $f['priorities'], true))    return false;
+        if (!empty($f['types'])      && !in_array($e['type_name'] ?? '', $f['types'], true))        return false;
+        return true;
+    }));
+}
 
 // Default column widths (out of 12 units)
 $colDefaultWidths = [
@@ -267,6 +285,8 @@ if ($curRow) $blockRows[] = $curRow;
   $bw    = $bcfg['width'] ?? 'full';
   $barH  = max(8,  min(32, (int)($bcfg['barHeight'] ?? 12)));
   $kpiCols = max(2, min(4, (int)($bcfg['kpiCols'] ?? 4)));
+  $blkEntries = rdFilterEntries($entries, $bcfg);
+  $blkFiltered = $blkEntries !== $entries;
 ?>
 <div class="block-col w-<?= htmlspecialchars($bw) ?>">
 
@@ -307,21 +327,42 @@ if ($curRow) $blockRows[] = $curRow;
 </div>
 
 <?php elseif ($btype === 'summary'): ?>
+<?php
+  $sTotal = count($blkEntries);
+  $sOpen  = count(array_filter($blkEntries, fn($e) => in_array($e['status']??'', $openSt)));
+  $sDone  = count(array_filter($blkEntries, fn($e) => in_array($e['status']??'', $doneSt)));
+  $sTypes = count(array_unique(array_filter(array_column($blkEntries,'type_name'))));
+?>
 <div class="section no-break">
-  <div class="section-title">Kennzahlen</div>
+  <div class="section-title">Kennzahlen<?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
   <div class="kpi-grid" style="grid-template-columns:repeat(<?= $kpiCols ?>,1fr)">
-    <div class="kpi-card"><div class="kpi-num"><?= $total ?></div><div class="kpi-lbl">Gesamt</div></div>
-    <div class="kpi-card"><div class="kpi-num"><?= $open ?></div><div class="kpi-lbl">Offen</div></div>
-    <div class="kpi-card"><div class="kpi-num"><?= $done ?></div><div class="kpi-lbl">Erledigt</div></div>
-    <div class="kpi-card"><div class="kpi-num"><?= $types ?></div><div class="kpi-lbl">Typen</div></div>
+    <div class="kpi-card"><div class="kpi-num"><?= $sTotal ?></div><div class="kpi-lbl">Gesamt</div></div>
+    <div class="kpi-card"><div class="kpi-num"><?= $sOpen ?></div><div class="kpi-lbl">Offen</div></div>
+    <div class="kpi-card"><div class="kpi-num"><?= $sDone ?></div><div class="kpi-lbl">Erledigt</div></div>
+    <div class="kpi-card"><div class="kpi-num"><?= $sTypes ?></div><div class="kpi-lbl">Typen</div></div>
   </div>
 </div>
 
-<?php elseif ($btype === 'chart_type' && $byType): ?>
+<?php elseif ($btype === 'chart_type'): ?>
+<?php
+  if ($blkFiltered) {
+      $typeAgg = [];
+      foreach ($blkEntries as $e) {
+          $k = $e['type_name'] ?? '–';
+          if (!isset($typeAgg[$k])) $typeAgg[$k] = ['name'=>$k,'color'=>$e['type_color']??$primary,'cnt'=>0];
+          $typeAgg[$k]['cnt']++;
+      }
+      $typeRows = array_values($typeAgg);
+      usort($typeRows, fn($a,$b) => $b['cnt'] <=> $a['cnt']);
+  } else {
+      $typeRows = $byType;
+  }
+?>
+<?php if ($typeRows): ?>
 <div class="section">
-  <div class="section-title">Nach Typ</div>
-  <?php $max = max(array_column($byType,'cnt')?:[1]); ?>
-  <?php foreach ($byType as $row): ?>
+  <div class="section-title">Nach Typ<?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
+  <?php $max = max(array_column($typeRows,'cnt')?:[1]); ?>
+  <?php foreach ($typeRows as $row): ?>
   <div class="bar-row">
     <div class="bar-lbl"><?= htmlspecialchars($row['name']??'–') ?></div>
     <div class="bar-track" style="height:<?= $barH ?>px">
@@ -333,12 +374,28 @@ if ($curRow) $blockRows[] = $curRow;
   </div>
   <?php endforeach; ?>
 </div>
+<?php endif; ?>
 
-<?php elseif ($btype === 'chart_status' && $byStatus): ?>
+<?php elseif ($btype === 'chart_status'): ?>
+<?php
+  if ($blkFiltered) {
+      $statusAgg = [];
+      foreach ($blkEntries as $e) {
+          $k = $e['status'] ?? '–';
+          $statusAgg[$k] = ($statusAgg[$k] ?? 0) + 1;
+      }
+      arsort($statusAgg);
+      $statusRows = [];
+      foreach ($statusAgg as $st => $cnt) { $statusRows[] = ['status'=>$st,'cnt'=>$cnt]; }
+  } else {
+      $statusRows = $byStatus;
+  }
+?>
+<?php if ($statusRows): ?>
 <div class="section">
-  <div class="section-title">Nach Status</div>
-  <?php $max = max(array_column($byStatus,'cnt')?:[1]); ?>
-  <?php foreach ($byStatus as $row): ?>
+  <div class="section-title">Nach Status<?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
+  <?php $max = max(array_column($statusRows,'cnt')?:[1]); ?>
+  <?php foreach ($statusRows as $row): ?>
   <?php $sc = $statusColors[$row['status']??''] ?? '#6b7280'; ?>
   <div class="bar-row">
     <div class="bar-lbl"><?= htmlspecialchars($row['status']??'–') ?></div>
@@ -351,16 +408,17 @@ if ($curRow) $blockRows[] = $curRow;
   </div>
   <?php endforeach; ?>
 </div>
+<?php endif; ?>
 
 <?php elseif ($btype === 'chart_priority'): ?>
 <?php
   $byPrio = [];
-  foreach ($entries as $e) { $p=$e['priority']??'–'; $byPrio[$p]=($byPrio[$p]??0)+1; }
+  foreach ($blkEntries as $e) { $p=$e['priority']??'–'; $byPrio[$p]=($byPrio[$p]??0)+1; }
   arsort($byPrio); $maxP = max($byPrio?:[1]);
 ?>
 <?php if ($byPrio): ?>
 <div class="section">
-  <div class="section-title">Nach Priorität</div>
+  <div class="section-title">Nach Priorität<?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
   <?php foreach ($byPrio as $prio => $cnt): ?>
   <?php $pc = $priorityColors[$prio] ?? '#6b7280'; ?>
   <div class="bar-row">
@@ -376,11 +434,27 @@ if ($curRow) $blockRows[] = $curRow;
 </div>
 <?php endif; ?>
 
-<?php elseif ($btype === 'chart_firmware' && $byFirmware): ?>
+<?php elseif ($btype === 'chart_firmware'): ?>
+<?php
+  if ($blkFiltered) {
+      $fwAgg = [];
+      foreach ($blkEntries as $e) {
+          $fw = $e['firmware_version'] ?? '';
+          if ($fw === '') continue;
+          $fwAgg[$fw] = ($fwAgg[$fw] ?? 0) + 1;
+      }
+      arsort($fwAgg);
+      $fwRows = [];
+      foreach (array_slice($fwAgg, 0, 15, true) as $fw => $cnt) { $fwRows[] = ['firmware_version'=>$fw,'cnt'=>$cnt]; }
+  } else {
+      $fwRows = $byFirmware;
+  }
+?>
+<?php if ($fwRows): ?>
 <div class="section">
-  <div class="section-title">Nach Firmware</div>
-  <?php $max = max(array_column($byFirmware,'cnt')?:[1]); ?>
-  <?php foreach ($byFirmware as $row): ?>
+  <div class="section-title">Nach Firmware<?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
+  <?php $max = max(array_column($fwRows,'cnt')?:[1]); ?>
+  <?php foreach ($fwRows as $row): ?>
   <div class="bar-row">
     <div class="bar-lbl"><?= htmlspecialchars($row['firmware_version']??'–') ?></div>
     <div class="bar-track" style="height:<?= $barH ?>px">
@@ -392,6 +466,7 @@ if ($curRow) $blockRows[] = $curRow;
   </div>
   <?php endforeach; ?>
 </div>
+<?php endif; ?>
 
 <?php elseif ($btype === 'table'): ?>
 <?php
@@ -412,7 +487,7 @@ if ($curRow) $blockRows[] = $curRow;
   // First row defines the table columns (header)
   $selCols    = $rowGroups[0];
   $extraRows  = array_slice($rowGroups, 1); // additional sub-rows
-  $rows       = array_slice($entries, 0, $limit);
+  $rows       = array_slice($blkEntries, 0, $limit);
   $totalUnits = array_sum(array_map(fn($c) => $colWidths[$c] ?? $colDefaultWidths[$c] ?? 2, $selCols));
 ?>
 <?php
@@ -420,7 +495,7 @@ if ($curRow) $blockRows[] = $curRow;
   $blkOrientClass = ($blkOrient === 'landscape') ? 'blk-landscape' : (($blkOrient === 'portrait') ? 'blk-portrait' : '');
 ?>
 <div class="section" style="page-break-before:auto;break-before:auto">
-  <div class="section-title">Einträge<?= $multiRow ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(mehrzeilig)</span>' : '' ?></div>
+  <div class="section-title">Einträge<?= $multiRow ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(mehrzeilig)</span>' : '' ?><?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
   <div class="tbl-wrap">
   <table>
     <colgroup>
@@ -517,8 +592,8 @@ if ($curRow) $blockRows[] = $curRow;
     </tbody>
   </table>
   </div>
-  <?php if (count($entries) > $limit): ?>
-  <p style="font-size:9px;color:#9ca3af;margin-top:4px">… und <?= count($entries)-$limit ?> weitere Einträge</p>
+  <?php if (count($blkEntries) > $limit): ?>
+  <p style="font-size:9px;color:#9ca3af;margin-top:4px">… und <?= count($blkEntries)-$limit ?> weitere Einträge</p>
   <?php endif; ?>
 </div>
 
@@ -526,12 +601,12 @@ if ($curRow) $blockRows[] = $curRow;
 <?php
   $lim  = (int)($bcfg['limit'] ?? 10);
   $pmap = ['Highest'=>0,'High'=>1,'Medium'=>2,'Low'=>3];
-  $sorted = $entries;
+  $sorted = $blkEntries;
   usort($sorted, fn($a,$b) => ($pmap[$a['priority']??'']??9) <=> ($pmap[$b['priority']??'']??9));
   $top = array_slice($sorted, 0, $lim);
 ?>
 <div class="section">
-  <div class="section-title">Top <?= $lim ?> Issues</div>
+  <div class="section-title">Top <?= $lim ?> Issues<?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
   <table style="table-layout:auto">
     <thead><tr>
       <th style="width:24px">#</th><th>Titel</th>
@@ -561,9 +636,9 @@ if ($curRow) $blockRows[] = $curRow;
 
 <?php elseif ($btype === 'timeline'): ?>
 <div class="section">
-  <div class="section-title">Timeline</div>
+  <div class="section-title">Timeline<?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
   <?php
-    $grouped = []; foreach ($entries as $e) $grouped[$e['entry_date']][] = $e;
+    $grouped = []; foreach ($blkEntries as $e) $grouped[$e['entry_date']][] = $e;
     krsort($grouped); $shown = 0; $maxTl = (int)($bcfg['limit'] ?? 50);
   ?>
   <?php foreach ($grouped as $date => $dayEntries): ?>

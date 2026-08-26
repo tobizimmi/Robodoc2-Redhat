@@ -307,6 +307,14 @@ var _rdBlocks = [];
 var _rdDragSrc  = null;
 var _rdDragType = null;
 
+var RD_STATUSES    = <?= json_encode(entryStatuses()) ?>;
+var RD_PRIORITIES  = ['Blocker','Highest','High','Medium','Low'];
+var RD_ENTRY_TYPES = <?= json_encode(array_values(array_column($entryTypes, 'name'))) ?>;
+// Block types whose content is built from the entry list, so a per-block
+// filter (status/priority/type) makes sense on them — project_header/text/
+// divider/page_break don't consume entries directly.
+var RD_FILTERABLE = {summary:1,chart_type:1,chart_status:1,chart_priority:1,chart_firmware:1,table:1,top_issues:1,timeline:1};
+
 var RD_DEFS = {
   project_header: {l:'Projektinfo-Header',    i:'bi-building',             c:'#6366f1', d:'Projektname, Status, Beschreibung'},
   summary:        {l:'Kennzahlen',             i:'bi-grid-1x2',             c:'#0ea5e9', d:'Gesamt, offen, erledigt, Typen'},
@@ -618,6 +626,37 @@ function rdRenderCanvas(){
       }
       body+='</div>';
     }
+    // Per-block filter: narrows just this block's entries (e.g. a priority chart
+    // that should only count "New"/"Reviewed" bugs) without affecting the rest
+    // of the report, which still uses the full entry set.
+    if(RD_FILTERABLE[b.type]){
+      var filt=b.cfg.filter||{};
+      var fSt=filt.statuses||[], fPr=filt.priorities||[], fTy=filt.types||[];
+      function rdChip(kind,val,label,active){
+        return '<label class="rd-filter-chip" style="display:inline-flex;align-items:center;gap:3px;background:'+(active?'#6366f1':'#374151')+';'
+          +'color:#fff;padding:2px 7px;border-radius:12px;font-size:10px;cursor:pointer;user-select:none">'
+          +'<input type="checkbox" class="rdFiltChip" data-bid="'+b.id+'" data-kind="'+kind+'" data-val="'+rdEsc(val)+'"'
+          +(active?' checked':'')+' style="width:11px;height:11px;margin:0;cursor:pointer">'+rdEsc(label)+'</label>';
+      }
+      body+='<div style="border-top:1px solid #374151;margin-top:10px;padding-top:10px">';
+      body+='<div style="font-size:10px;color:#6b7280;margin-bottom:2px;font-weight:600;text-transform:uppercase;letter-spacing:.3px">Filter für diesen Bereich</div>';
+      body+='<div style="font-size:10px;color:#6b7280;margin-bottom:6px">Leer = alle Einträge. Der restliche Bericht bleibt davon unberührt.</div>';
+      body+='<div class="rd-lbl">Status</div>';
+      body+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">';
+      Object.keys(RD_STATUSES).forEach(function(slug){ body+=rdChip('statuses',slug,RD_STATUSES[slug],fSt.indexOf(slug)>=0); });
+      body+='</div>';
+      body+='<div class="rd-lbl">Priorität</div>';
+      body+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">';
+      RD_PRIORITIES.forEach(function(p){ body+=rdChip('priorities',p,p,fPr.indexOf(p)>=0); });
+      body+='</div>';
+      if(RD_ENTRY_TYPES.length){
+        body+='<div class="rd-lbl">Eintragstyp</div>';
+        body+='<div style="display:flex;flex-wrap:wrap;gap:4px">';
+        RD_ENTRY_TYPES.forEach(function(t){ body+=rdChip('types',t,t,fTy.indexOf(t)>=0); });
+        body+='</div>';
+      }
+      body+='</div>';
+    }
     body+='</div>';
     wrap.innerHTML=h+body;
     // Drag reorder
@@ -648,6 +687,19 @@ function rdRenderCanvas(){
     });
   });
   cv.querySelectorAll('.rdLim').forEach(function(inp){inp.addEventListener('change',function(){var b=_rdBlocks.find(function(x){return x.id===+inp.dataset.bid;});if(b){b.cfg.limit=+inp.value;}rdUpdatePreview();});});
+  cv.querySelectorAll('.rdFiltChip').forEach(function(cb){
+    cb.addEventListener('change',function(){
+      var b=_rdBlocks.find(function(x){return x.id===+cb.dataset.bid;});
+      if(!b)return;
+      if(!b.cfg.filter)b.cfg.filter={statuses:[],priorities:[],types:[]};
+      var kind=cb.dataset.kind, val=cb.dataset.val;
+      if(!b.cfg.filter[kind])b.cfg.filter[kind]=[];
+      var idx=b.cfg.filter[kind].indexOf(val);
+      if(cb.checked){ if(idx<0)b.cfg.filter[kind].push(val); }
+      else if(idx>=0){ b.cfg.filter[kind].splice(idx,1); }
+      rdRenderCanvas(); rdUpdatePreview();
+    });
+  });
   cv.querySelectorAll('.rdColCb').forEach(function(cb){
     cb.addEventListener('change',function(){
       var b=_rdBlocks.find(function(x){return x.id===+cb.dataset.bid;});
@@ -811,6 +863,14 @@ function rdUpdatePreview(){
     else if(b.type==='table') h+='<span style="color:#888;font-size:11px">Tabelle · max. '+(b.cfg.limit||50)+' Zeilen · Spalten: '+(b.cfg.columns||[]).join(', ')+'</span>';
     else if(b.type==='top_issues') h+='<span style="color:#888;font-size:11px">Top '+(b.cfg.limit||10)+' Issues nach Priorität</span>';
     else if(b.type==='timeline') h+='<span style="color:#888;font-size:11px">Chronologische Timeline</span>';
+    if(RD_FILTERABLE[b.type]){
+      var pfilt=b.cfg.filter||{};
+      var pfParts=[];
+      if((pfilt.statuses||[]).length)   pfParts.push('Status: '+pfilt.statuses.map(function(s){return RD_STATUSES[s]||s;}).join(', '));
+      if((pfilt.priorities||[]).length) pfParts.push('Prio: '+pfilt.priorities.join(', '));
+      if((pfilt.types||[]).length)      pfParts.push('Typ: '+pfilt.types.join(', '));
+      if(pfParts.length) h+='<div style="font-size:9px;color:#c2410c;margin-top:4px">🔍 '+rdEsc(pfParts.join(' · '))+'</div>';
+    }
     h+='</div></div>';
   });
   // Footer
