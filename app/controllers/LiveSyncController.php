@@ -186,39 +186,61 @@ class LiveSyncController
     // the source cannot reach this instance directly (e.g. this instance's
     // ingress isn't publicly reachable) - this instance reaches OUT instead,
     // the same reasoning as the Zentao relay.
-    public static function pullFromSource(): int
+    // Returns ['imported'=>int, 'pending'=>int, 'error'=>?string] instead of a
+    // bare count so the cron script can report *why* nothing came through
+    // (unreachable source, auth rejected, nothing pending, ingest rejected) —
+    // a bare 0 gives no way to tell those apart.
+    public static function pullFromSource(): array
     {
-        if (!self::liveSyncEnabled()) return 0;
+        if (!self::liveSyncEnabled()) return ['imported' => 0, 'pending' => 0, 'error' => null];
         $sourceUrl = rtrim(trim(appSetting('live_sync_pull_source_url')), '/');
         $secret    = trim(Encryption::decrypt((string)appSetting('live_sync_secret')));
-        if (!$sourceUrl || !$secret) return 0;
+        if (!$sourceUrl || !$secret) {
+            return ['imported' => 0, 'pending' => 0, 'error' => 'Pull nicht konfiguriert (Quell-URL oder Secret fehlt)'];
+        }
 
-        $pending = self::httpGetJson($sourceUrl . '/api/sync/pending', $secret);
-        if (!$pending || empty($pending['queue'])) return 0;
+        $err = null;
+        $pending = self::httpGetJson($sourceUrl . '/api/sync/pending', $secret, $err);
+        if ($pending === null) {
+            return ['imported' => 0, 'pending' => 0, 'error' => 'Quelle nicht erreichbar (' . $sourceUrl . '/api/sync/pending): ' . $err];
+        }
+        $queue = $pending['queue'] ?? [];
+        if (!$queue) return ['imported' => 0, 'pending' => 0, 'error' => null];
 
         $doneIds  = [];
         $imported = 0;
-        foreach ($pending['queue'] as $row) {
+        $reasons  = [];
+        foreach ($queue as $row) {
             $entryId = (int)($row['entry_id'] ?? 0);
             $queueId = (int)($row['id'] ?? 0);
             if (!$entryId || !$queueId) continue;
 
-            $detail = self::httpGetJson($sourceUrl . '/api/sync/entry/' . $entryId, $secret);
-            if (!$detail || empty($detail['entry'])) continue;
+            $detailErr = null;
+            $detail = self::httpGetJson($sourceUrl . '/api/sync/entry/' . $entryId, $secret, $detailErr);
+            if (!$detail || empty($detail['entry'])) {
+                $reasons[] = "Eintrag $entryId: " . ($detailErr ?: 'keine Daten erhalten');
+                continue;
+            }
 
             $result = self::ingestPayload($detail['entry']);
             if ($result['ok']) {
                 $imported++;
                 $doneIds[] = $queueId;
+            } else {
+                $reasons[] = "Eintrag $entryId: " . ($result['error'] ?? 'unbekannter Fehler');
             }
         }
         if ($doneIds) {
             self::httpPostJson($sourceUrl . '/api/sync/ack', $secret, ['queue_ids' => $doneIds]);
         }
-        return $imported;
+        return [
+            'imported' => $imported,
+            'pending'  => count($queue),
+            'error'    => $reasons ? implode('; ', array_slice($reasons, 0, 5)) : null,
+        ];
     }
 
-    private static function httpGetJson(string $url, string $secret): ?array
+    private static function httpGetJson(string $url, string $secret, ?string &$err = null): ?array
     {
         $ch = curl_init($url);
         curl_setopt_array($ch, [
@@ -230,10 +252,13 @@ class LiveSyncController
         ]);
         $resp = curl_exec($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr = curl_error($ch);
         curl_close($ch);
-        if ($resp === false || $code !== 200) return null;
+        if ($resp === false) { $err = 'cURL: ' . $curlErr; return null; }
+        if ($code !== 200) { $err = 'HTTP ' . $code . ': ' . substr((string)$resp, 0, 300); return null; }
         $data = json_decode($resp, true);
-        return is_array($data) ? $data : null;
+        if (!is_array($data)) { $err = 'Ungültige JSON-Antwort'; return null; }
+        return $data;
     }
 
     private static function httpPostJson(string $url, string $secret, array $body): ?array

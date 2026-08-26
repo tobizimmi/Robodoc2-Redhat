@@ -29,6 +29,10 @@ require_once __DIR__ . '/../bootstrap.php';
 echo '[' . date('Y-m-d H:i:s') . '] Live-Sync: Prüfung gestartet' . PHP_EOL;
 
 $sent = LiveSyncController::runQueueRetries();
-$pulled = LiveSyncController::pullFromSource();
+$pull = LiveSyncController::pullFromSource();
 
-echo '[' . date('Y-m-d H:i:s') . "] Fertig — $sent nachgesendet, $pulled abgeholt" . PHP_EOL;
+echo '[' . date('Y-m-d H:i:s') . "] Fertig — $sent nachgesendet, {$pull['imported']} abgeholt"
+    . ($pull['pending'] ? " (ausstehend auf Quelle: {$pull['pending']})" : '') . PHP_EOL;
+if ($pull['error']) {
+    echo '[' . date('Y-m-d H:i:s') . '] Pull-Hinweis: ' . $pull['error'] . PHP_EOL;
+}
