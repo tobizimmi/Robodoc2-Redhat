@@ -483,6 +483,10 @@ if ($curRow) $blockRows[] = $curRow;
       $rowGroups = $multiRow
           ? [$selColsFb, ['description']]  // auto: cols on row1, description on row2
           : [$selColsFb];
+  } else {
+      // Explicit rowGroups (from the row-group editor) imply multi-row whenever
+      // there's more than one sub-row, regardless of the (unused) multiRow flag.
+      $multiRow = count($rowGroups) > 1;
   }
   // First row defines the table columns (header)
   $selCols    = $rowGroups[0];
