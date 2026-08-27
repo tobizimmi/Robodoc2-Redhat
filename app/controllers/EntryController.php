@@ -1313,10 +1313,15 @@ View::render('entries/edit', compact('entry','data','projects','entryTypes','cat
     // ?? File Upload (AJAX, supports multiple files) ??????????????
     public static function upload(string $id): void {
         Auth::requireView('entries');
+        // Buffer everything from here on so a stray PHP warning (display_errors is on
+        // globally) can't leak into this JSON response and break it client-side -
+        // cleared right before each echo below.
+        ob_start();
         // Detect PHP silently dropping POST body when post_max_size is exceeded
         $contentLength = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
         $postMaxBytes  = self::iniBytes(ini_get('post_max_size'));
         if ($contentLength > 0 && $postMaxBytes > 0 && $contentLength > $postMaxBytes) {
+            while (ob_get_level() > 0) { ob_end_clean(); }
             header('Content-Type: application/json');
             echo json_encode(['error' => 'Total upload size too large (server limit: ' . ini_get('post_max_size') . ')']);
             exit;
@@ -1327,6 +1332,7 @@ View::render('entries/edit', compact('entry','data','projects','entryTypes','cat
 
         // Ensure base upload directory exists
         if (!is_dir(UPLOAD_DIR) && !mkdir(UPLOAD_DIR, 0755, true)) {
+            while (ob_get_level() > 0) { ob_end_clean(); }
             echo json_encode(['error' => 'Upload directory could not be created: ' . UPLOAD_DIR]);
             exit;
         }
@@ -1334,6 +1340,7 @@ View::render('entries/edit', compact('entry','data','projects','entryTypes','cat
         // Accept name="files[]" (multiple) or name="file" (single)
         $raw = $_FILES['files'] ?? $_FILES['file'] ?? null;
         if (!$raw || empty($raw['tmp_name'])) {
+            while (ob_get_level() > 0) { ob_end_clean(); }
             echo json_encode(['error' => 'No file received']); exit;
         }
 
@@ -1386,6 +1393,7 @@ View::render('entries/edit', compact('entry','data','projects','entryTypes','cat
             try { LiveSyncController::pushEntry((int)$id); } catch (Throwable) {}
         }
 
+        while (ob_get_level() > 0) { ob_end_clean(); }
         echo json_encode(['success' => count($results), 'attachments' => $results, 'errors' => $errors]);
         exit;
     }
@@ -1786,7 +1794,10 @@ View::render('entries/edit', compact('entry','data','projects','entryTypes','cat
 
         // Kick off background video compression (H.264+AAC MP4, ~80-90% size reduction).
         // The leading '&' + redirected I/O detaches the process so PHP does not wait for it.
-        if (str_starts_with($mime, 'video/') && function_exists('exec')) {
+        // @-suppressed and gated on is_executable(): with display_errors on globally, any
+        // warning here (exec() disabled, ffmpeg missing/not executable in this container)
+        // would otherwise leak into this endpoint's JSON response and break it client-side.
+        if (str_starts_with($mime, 'video/') && function_exists('exec') && @is_executable('/usr/bin/ffmpeg')) {
             $compFn   = bin2hex(random_bytes(16)) . '.mp4';
             $compDest = $dir . $compFn;
             $cmd = sprintf(
@@ -1794,7 +1805,7 @@ View::render('entries/edit', compact('entry','data','projects','entryTypes','cat
                 escapeshellarg($dest),
                 escapeshellarg($compDest)
             );
-            exec($cmd);
+            @exec($cmd);
             // Register a pending-compression marker so a cron/cleanup job can swap the file
             // in once ffmpeg finishes, without blocking this request.
             try {
