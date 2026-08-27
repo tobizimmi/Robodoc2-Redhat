@@ -1325,6 +1325,13 @@ function getMigrations(): array {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_lsrl_ip_kind_time (ip_address, kind, created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        // Live-Sync: manual re-check of an already-imported entry against its source
+        // (Admin > Sync Review). Snapshot holds the last-fetched remote field values
+        // + any attachments not yet imported, so the review page can render a diff
+        // without calling out to the source again.
+        "ALTER TABLE entries ADD COLUMN IF NOT EXISTS live_sync_remote_snapshot TEXT NULL",
+        "ALTER TABLE entries ADD COLUMN IF NOT EXISTS live_sync_has_changes TINYINT(1) NOT NULL DEFAULT 0",
+        "ALTER TABLE entries ADD COLUMN IF NOT EXISTS live_sync_checked_at DATETIME NULL",
     ];
 }
 
@@ -1361,6 +1368,19 @@ function runPortableMigrations(): void {
             $pdo->exec("ALTER TABLE entry_attachments ADD COLUMN live_source_id INT UNSIGNED NULL DEFAULT NULL COMMENT 'entry_attachments.id on the sending instance, so a re-sync only fetches new attachments'");
         }
     } catch (\Throwable) {}
+    foreach ([
+        'live_sync_remote_snapshot' => 'TEXT NULL',
+        'live_sync_has_changes'     => "TINYINT(1) NOT NULL DEFAULT 0",
+        'live_sync_checked_at'      => 'DATETIME NULL',
+    ] as $col => $def) {
+        try {
+            $stmt = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='entries' AND COLUMN_NAME=?");
+            $stmt->execute([$col]);
+            if (!$stmt->fetchColumn()) {
+                $pdo->exec("ALTER TABLE entries ADD COLUMN $col $def");
+            }
+        } catch (\Throwable) {}
+    }
 }
 
 function runMigrations(): void {

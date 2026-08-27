@@ -446,6 +446,7 @@ $router->get('/api/sync/attachment/{token}',    [LiveSyncController::class, 'att
 $router->get('/api/sync/pending',               [LiveSyncController::class, 'listPending']);
 $router->get('/api/sync/entry/{id}',            [LiveSyncController::class, 'entryDetail']);
 $router->post('/api/sync/ack',                  [LiveSyncController::class, 'ackSent']);
+$router->post('/entries/{id}/live-sync/check',  [LiveSyncController::class, 'checkNow']);
 
 // -- Robots (per-robot history) ----------------------------
 $router->get('/robots',                                    [RobotController::class, 'index']);

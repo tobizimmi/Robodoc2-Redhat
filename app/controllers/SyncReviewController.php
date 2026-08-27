@@ -83,8 +83,35 @@ class SyncReviewController
             $zentaoDiffs[$e['id']] = $diffs;
         }
 
+        // -- Live-Sync: diffs come from the snapshot saved by the last manual
+        // "Auf Änderungen prüfen" check (no API call at render time, like the two above).
+        $liveSyncEntries = Database::fetchAll(
+            "SELECT e.id, e.title, e.status, e.priority, e.entry_date, e.live_origin_id,
+                    e.live_sync_remote_snapshot, e.live_sync_checked_at,
+                    p.name project_name, et.name type_name, et.color type_color
+             FROM entries e
+             LEFT JOIN projects p  ON p.id  = e.project_id
+             LEFT JOIN entry_types et ON et.id = e.entry_type_id
+             WHERE e.live_sync_has_changes = 1 AND e.live_origin_id IS NOT NULL
+             ORDER BY e.entry_date DESC"
+        );
+        $liveSyncDiffs = [];
+        foreach ($liveSyncEntries as $e) {
+            $snapshot = json_decode($e['live_sync_remote_snapshot'] ?? '', true) ?: [];
+            $remote   = $snapshot['fields'] ?? [];
+            $diffs    = [];
+            foreach (LiveSyncController::TRACKED_FIELDS as $key => $label) {
+                $localVal  = (string)($e[$key] ?? '');
+                $remoteVal = (string)($remote[$key] ?? '');
+                if ($remoteVal !== '' && $localVal !== $remoteVal) {
+                    $diffs[] = ['field' => $key, 'label' => $label, 'local' => $localVal, 'remote' => $remoteVal];
+                }
+            }
+            $liveSyncDiffs[$e['id']] = ['diffs' => $diffs, 'new_attachments' => $snapshot['new_attachments'] ?? []];
+        }
+
         View::render('admin/sync-review', compact(
-            'jiraEntries','zentaoEntries','jiraDiffs','zentaoDiffs'
+            'jiraEntries','zentaoEntries','jiraDiffs','zentaoDiffs','liveSyncEntries','liveSyncDiffs'
         ) + ['title' => 'Sync Review']);
     }
 
@@ -103,6 +130,8 @@ class SyncReviewController
             self::handleJiraAction($entry, $action);
         } elseif ($source === 'zentao') {
             self::handleZentaoAction($entry, $action);
+        } elseif ($source === 'livesync') {
+            self::handleLiveSyncAction($entry, $action);
         } else {
             echo json_encode(['error' => 'Unknown source']);
         }
@@ -189,6 +218,33 @@ class SyncReviewController
         }
     }
 
+    // -- Live-Sync review actions. Unlike Jira/Zentao's all-or-nothing accept,
+    // 'accept' applies only the checkboxes the admin actually selected (fields[]
+    // in the POST body, plus import_attachments=1) - the source may have several
+    // independent changes and not all of them are necessarily wanted locally.
+    private static function handleLiveSyncAction(array $entry, string $action): void
+    {
+        $id = (int)$entry['id'];
+        switch ($action) {
+            case 'accept':
+                $fields = array_values(array_intersect(
+                    (array)($_POST['fields'] ?? []),
+                    array_keys(LiveSyncController::TRACKED_FIELDS)
+                ));
+                $result = LiveSyncController::applyRemoteChanges($id, $fields, !empty($_POST['import_attachments']));
+                echo json_encode($result + ['action' => 'accepted']);
+                break;
+
+            case 'dismiss':
+                Database::execute('UPDATE entries SET live_sync_has_changes=0 WHERE id=?', [$id]);
+                echo json_encode(['success' => true, 'action' => 'dismissed']);
+                break;
+
+            default:
+                echo json_encode(['error' => 'Unknown action']);
+        }
+    }
+
     // ── Bulk actions ──────────────────────────────────────────
     public static function bulkAction(string $source, string $action): void
     {
@@ -196,18 +252,36 @@ class SyncReviewController
         Auth::verifyCsrf();
         header('Content-Type: application/json');
 
-        $col     = $source === 'jira' ? 'jira_has_changes' : 'zentao_has_changes';
+        $col = match ($source) {
+            'jira'     => 'jira_has_changes',
+            'zentao'   => 'zentao_has_changes',
+            'livesync' => 'live_sync_has_changes',
+            default    => null,
+        };
+        if (!$col) { echo json_encode(['error' => 'Unknown source']); exit; }
         $entries = Database::fetchAll(
-            "SELECT * FROM entries WHERE $col = 1 AND "
-            . ($source === 'jira' ? "jira_issue_key IS NOT NULL AND jira_issue_key != ''" : "zentao_bug_id IS NOT NULL")
+            "SELECT * FROM entries WHERE $col = 1 AND " . match ($source) {
+                'jira'     => "jira_issue_key IS NOT NULL AND jira_issue_key != ''",
+                'zentao'   => 'zentao_bug_id IS NOT NULL',
+                'livesync' => 'live_origin_id IS NOT NULL',
+            }
         );
+
+        // Bulk "accept" for Live-Sync has no per-entry checkbox selection to read -
+        // apply every tracked field plus attachments, same as Jira/Zentao's
+        // all-or-nothing accept.
+        if ($source === 'livesync' && $action === 'accept') {
+            $_POST['fields']             = array_keys(LiveSyncController::TRACKED_FIELDS);
+            $_POST['import_attachments'] = '1';
+        }
 
         $processed = 0; $errors = [];
         foreach ($entries as $entry) {
             ob_start();
             try {
                 if ($source === 'jira') self::handleJiraAction($entry, $action);
-                else                    self::handleZentaoAction($entry, $action);
+                elseif ($source === 'zentao') self::handleZentaoAction($entry, $action);
+                else self::handleLiveSyncAction($entry, $action);
                 $res = json_decode(ob_get_clean(), true);
                 // A successful "push" doesn't set 'success' (only 'accept'/'dismiss' do) — treat
                 // "no error key" as success for all actions, matching what entryAction() does.

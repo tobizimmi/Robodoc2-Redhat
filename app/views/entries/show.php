@@ -218,6 +218,52 @@
 </div>
 <?php endif; ?>
 
+<?php if (!empty($entry['live_origin_id'])): ?>
+<?php if (!empty($entry['live_sync_has_changes'])): ?>
+<div class="alert alert-primary d-flex align-items-center gap-3 py-2 mb-3">
+  <i class="bi bi-arrow-repeat fs-5 flex-shrink-0"></i>
+  <div class="flex-grow-1 small">
+    <strong>Live-Sync-Quelle hat Änderungen</strong>, die noch nicht übernommen wurden.
+  </div>
+  <a href="<?= url('admin/sync-review') ?>" class="btn btn-primary btn-sm text-nowrap">
+    <i class="bi bi-eye me-1"></i>Änderungen ansehen
+  </a>
+</div>
+<?php else: ?>
+<div class="d-flex align-items-center gap-2 mb-3">
+  <button type="button" class="btn btn-outline-secondary btn-sm" id="liveSyncCheckBtn"
+          onclick="liveSyncCheckNow(<?= (int)$entry['id'] ?>, this)">
+    <i class="bi bi-arrow-repeat me-1"></i>Auf Änderungen von der Quelle prüfen
+  </button>
+  <?php if (!empty($entry['live_sync_checked_at'])): ?>
+  <small class="text-muted">zuletzt geprüft: <?= formatDate($entry['live_sync_checked_at'], 'd.m.Y H:i') ?></small>
+  <?php endif; ?>
+</div>
+<script>
+function liveSyncCheckNow(id, btn) {
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Prüfe…';
+  fetch(`<?= url('entries/') ?>${id}/live-sync/check`, {
+    method: 'POST',
+    body: new URLSearchParams({ _csrf: '<?= e(Auth::csrfToken()) ?>' })
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.error) { btn.disabled = false; btn.innerHTML = orig; alert(d.error); return; }
+    if (d.has_changes) {
+      location.href = '<?= url('admin/sync-review') ?>';
+    } else {
+      btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Keine Änderungen';
+      setTimeout(() => { btn.innerHTML = orig; }, 2500);
+    }
+  })
+  .catch(() => { btn.disabled = false; btn.innerHTML = orig; alert('Netzwerkfehler'); });
+}
+</script>
+<?php endif; ?>
+<?php endif; ?>
+
 <div class="row g-4">
   <!-- Main content -->
   <div class="col-lg-8">

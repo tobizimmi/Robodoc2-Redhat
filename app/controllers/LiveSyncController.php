@@ -517,60 +517,10 @@ class LiveSyncController
         $attachErrors = [];
         $attachments  = (array)($body['attachments'] ?? []);
         foreach ($attachments as $att) {
-            $name = (string)($att['original_name'] ?? '(unbenannt)');
             $sourceId = (int)($att['source_id'] ?? 0);
             if ($sourceId && in_array($sourceId, $alreadyFetched, true)) continue;
-            $url  = (string)($att['download_url'] ?? '');
-            if (!$url) { $attachErrors[] = "$name: keine download_url im Payload"; continue; }
-            $scheme = parse_url($url, PHP_URL_SCHEME);
-            $host   = parse_url($url, PHP_URL_HOST) ?: '';
-            if (!in_array($scheme, ['http', 'https'], true)) {
-                $attachErrors[] = "$name: ungültige URL ($url) - fehlt Schema/Host? Ist 'app_url' in Admin > Settings auf der Quelle gesetzt?";
-                continue;
-            }
-            if ($sourceHost && strcasecmp($host, $sourceHost) !== 0) {
-                $attachErrors[] = "$name: Host '$host' nicht erlaubt (live_sync_source_host='$sourceHost')";
-                continue;
-            }
-
-            $ch = curl_init($url);
-            curl_setopt_array($ch, [
-                CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT => 8,
-                CURLOPT_TIMEOUT => 30, CURLOPT_SSL_VERIFYPEER => true,
-                // Advertise + auto-decode gzip/deflate - without this, a server that
-                // compresses the response anyway (e.g. PHP's zlib.output_compression
-                // forced on regardless of Accept-Encoding) hands back bytes curl
-                // never unpacks, silently corrupting the saved file.
-                CURLOPT_ENCODING => '',
-            ]);
-            $bytes   = curl_exec($ch);
-            $code    = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $curlErr = curl_error($ch);
-            curl_close($ch);
-            if ($bytes === false) { $attachErrors[] = "$name: cURL-Fehler ($curlErr)"; continue; }
-            if ($code !== 200) {
-                $attachErrors[] = "$name: HTTP $code beim Download ($url) - Antwort: " . substr(strip_tags((string)$bytes), 0, 200);
-                continue;
-            }
-            $expectedSize = (int)($att['file_size'] ?? 0);
-            if ($expectedSize > 0 && strlen($bytes) !== $expectedSize) {
-                $attachErrors[] = "$name: heruntergeladene Größe (" . strlen($bytes) . " Bytes) weicht von der Quelle ab ($expectedSize Bytes) - Download unvollständig oder beschädigt";
-                continue;
-            }
-
-            $mime = (string)($att['mime_type'] ?? 'application/octet-stream');
-            $ext  = self::MIME_EXT[$mime] ?? 'bin';
-            $fn   = bin2hex(random_bytes(16)) . '.' . $ext;
-            $dir  = UPLOAD_DIR . $entryId . '/';
-            if (!is_dir($dir)) @mkdir($dir, 0755, true);
-            $dest = $dir . $fn;
-            if (@file_put_contents($dest, $bytes) === false) { $attachErrors[] = "$name: konnte lokal nicht gespeichert werden"; continue; }
-
-            Database::insert(
-                'INSERT INTO entry_attachments (entry_id, filename, original_name, mime_type, file_size, file_path, live_source_id) VALUES (?,?,?,?,?,?,?)',
-                [$entryId, $fn, $att['original_name'] ?? $fn, $mime, strlen($bytes), $dest, $sourceId ?: null]
-            );
-            $fetched++;
+            $result = self::fetchOneAttachment($att, $entryId, $sourceHost);
+            if ($result['ok']) { $fetched++; } else { $attachErrors[] = $result['error']; }
         }
         if ($fetched) {
             try { Database::execute('UPDATE entries SET attachments_updated_at=NOW() WHERE id=?', [$entryId]); } catch (Throwable) {}
@@ -578,6 +528,179 @@ class LiveSyncController
 
         $result = ['ok' => true, 'entry_id' => $entryId, 'attachments_synced' => $fetched, 'attachments_total' => count($attachments)];
         if (!$isNew) $result['note'] = $fetched ? 'entry already imported, fetched new attachments' : 'already imported';
+        if ($attachErrors) $result['attachment_errors'] = $attachErrors;
+        return $result;
+    }
+
+    // -- Download one attachment from its signed URL and save it against $entryId.
+    // Shared by ingestPayload() (PUSH/PULL ingest) and applyRemoteChanges() (Sync
+    // Review "accept" for attachments discovered by a later manual re-check).
+    // Never fetches from a caller-supplied arbitrary host — allow-listed only.
+    private static function fetchOneAttachment(array $att, int $entryId, string $sourceHost): array
+    {
+        $name = (string)($att['original_name'] ?? '(unbenannt)');
+        $sourceId = (int)($att['source_id'] ?? 0);
+        $url  = (string)($att['download_url'] ?? '');
+        if (!$url) return ['ok' => false, 'error' => "$name: keine download_url im Payload"];
+        $scheme = parse_url($url, PHP_URL_SCHEME);
+        $host   = parse_url($url, PHP_URL_HOST) ?: '';
+        if (!in_array($scheme, ['http', 'https'], true)) {
+            return ['ok' => false, 'error' => "$name: ungültige URL ($url) - fehlt Schema/Host? Ist 'app_url' in Admin > Settings auf der Quelle gesetzt?"];
+        }
+        if ($sourceHost && strcasecmp($host, $sourceHost) !== 0) {
+            return ['ok' => false, 'error' => "$name: Host '$host' nicht erlaubt (live_sync_source_host='$sourceHost')"];
+        }
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT => 8,
+            CURLOPT_TIMEOUT => 30, CURLOPT_SSL_VERIFYPEER => true,
+            // Advertise + auto-decode gzip/deflate - without this, a server that
+            // compresses the response anyway (e.g. PHP's zlib.output_compression
+            // forced on regardless of Accept-Encoding) hands back bytes curl
+            // never unpacks, silently corrupting the saved file.
+            CURLOPT_ENCODING => '',
+        ]);
+        $bytes   = curl_exec($ch);
+        $code    = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr = curl_error($ch);
+        curl_close($ch);
+        if ($bytes === false) return ['ok' => false, 'error' => "$name: cURL-Fehler ($curlErr)"];
+        if ($code !== 200) {
+            return ['ok' => false, 'error' => "$name: HTTP $code beim Download ($url) - Antwort: " . substr(strip_tags((string)$bytes), 0, 200)];
+        }
+        $expectedSize = (int)($att['file_size'] ?? 0);
+        if ($expectedSize > 0 && strlen($bytes) !== $expectedSize) {
+            return ['ok' => false, 'error' => "$name: heruntergeladene Größe (" . strlen($bytes) . " Bytes) weicht von der Quelle ab ($expectedSize Bytes) - Download unvollständig oder beschädigt"];
+        }
+
+        $mime = (string)($att['mime_type'] ?? 'application/octet-stream');
+        $ext  = self::MIME_EXT[$mime] ?? 'bin';
+        $fn   = bin2hex(random_bytes(16)) . '.' . $ext;
+        $dir  = UPLOAD_DIR . $entryId . '/';
+        if (!is_dir($dir)) @mkdir($dir, 0755, true);
+        $dest = $dir . $fn;
+        if (@file_put_contents($dest, $bytes) === false) return ['ok' => false, 'error' => "$name: konnte lokal nicht gespeichert werden"];
+
+        Database::insert(
+            'INSERT INTO entry_attachments (entry_id, filename, original_name, mime_type, file_size, file_path, live_source_id) VALUES (?,?,?,?,?,?,?)',
+            [$entryId, $fn, $att['original_name'] ?? $fn, $mime, strlen($bytes), $dest, $sourceId ?: null]
+        );
+        return ['ok' => true];
+    }
+
+    // ============================== Sync Review (manual re-check) ===========
+
+    // -- Fields tracked for drift between the local copy and its Live-Sync origin.
+    // Public: also used by SyncReviewController to build the diff summary. --
+    public const TRACKED_FIELDS = [
+        'title' => 'Titel', 'description' => 'Beschreibung', 'status' => 'Status', 'priority' => 'Priorität',
+        'mower_serial' => 'Seriennummer', 'firmware_version' => 'Firmware', 'app_version' => 'App-Version',
+        'project_status_robot' => 'Projekt-Status Robot',
+    ];
+
+    // -- Manual, per-entry "check now" (Admin > Sync Review / entry page button).
+    // Re-fetches this entry from wherever it originally came from (the configured
+    // pull source), diffs the tracked fields and looks for attachments the source
+    // has that this copy doesn't, and stores the result for the review page - no
+    // automatic cron for this, checks are always explicitly requested.
+    public static function checkForChanges(int $entryId): array
+    {
+        $entry = Database::fetchOne('SELECT * FROM entries WHERE id=?', [$entryId]);
+        if (!$entry || empty($entry['live_origin_id'])) {
+            return ['ok' => false, 'error' => 'Dieser Eintrag stammt nicht aus Live-Sync.'];
+        }
+        $sourceUrl = rtrim(trim(appSetting('live_sync_pull_source_url')), '/');
+        $secret    = trim(Encryption::decrypt((string)appSetting('live_sync_secret')));
+        if (!$sourceUrl || !$secret) {
+            return ['ok' => false, 'error' => 'Abholen nicht konfiguriert (Quell-URL oder Secret fehlt in Admin > Live-Sync).'];
+        }
+
+        $err = null;
+        $detail = self::httpGetJson($sourceUrl . '/api/sync/entry/' . (int)$entry['live_origin_id'], $secret, $err);
+        if (!$detail || empty($detail['entry'])) {
+            return ['ok' => false, 'error' => 'Quelle nicht erreichbar: ' . $err];
+        }
+        $remote = $detail['entry'];
+
+        $diffs = [];
+        foreach (self::TRACKED_FIELDS as $key => $label) {
+            $localVal  = (string)($entry[$key] ?? '');
+            $remoteVal = (string)($remote[$key] ?? '');
+            if ($remoteVal !== '' && $localVal !== $remoteVal) {
+                $diffs[] = ['field' => $key, 'label' => $label, 'local' => $localVal, 'remote' => $remoteVal];
+            }
+        }
+
+        $localSourceIds = array_column(
+            Database::fetchAll('SELECT live_source_id FROM entry_attachments WHERE entry_id=? AND live_source_id IS NOT NULL', [$entryId]),
+            'live_source_id'
+        );
+        $newAttachments = [];
+        foreach ((array)($remote['attachments'] ?? []) as $att) {
+            $sid = (int)($att['source_id'] ?? 0);
+            if ($sid && !in_array($sid, $localSourceIds, true)) $newAttachments[] = $att;
+        }
+
+        $hasChanges = (bool)($diffs || $newAttachments);
+        Database::execute(
+            'UPDATE entries SET live_sync_remote_snapshot=?, live_sync_has_changes=?, live_sync_checked_at=NOW() WHERE id=?',
+            [json_encode(['fields' => $remote, 'new_attachments' => $newAttachments]), $hasChanges ? 1 : 0, $entryId]
+        );
+
+        return ['ok' => true, 'has_changes' => $hasChanges, 'diffs' => $diffs, 'new_attachments' => count($newAttachments)];
+    }
+
+    // -- AJAX endpoint for the "Auf Änderungen prüfen" button on an entry's own page. --
+    public static function checkNow(string $id): void
+    {
+        Auth::require();
+        Auth::verifyCsrf();
+        header('Content-Type: application/json');
+        echo json_encode(self::checkForChanges((int)$id));
+        exit;
+    }
+
+    // -- Sync Review "accept": apply selected fields and/or import new attachments
+    // from the snapshot saved by the last checkForChanges() call. Field selection
+    // is explicit (no snapshot => nothing to do) so a stale/cleared snapshot can
+    // never silently reapply an old diff.
+    public static function applyRemoteChanges(int $entryId, array $selectedFields, bool $importAttachments): array
+    {
+        $entry = Database::fetchOne('SELECT * FROM entries WHERE id=?', [$entryId]);
+        if (!$entry || !$entry['live_sync_remote_snapshot']) {
+            return ['ok' => false, 'error' => 'Kein gespeicherter Prüfstand - bitte zuerst erneut prüfen.'];
+        }
+        $snapshot = json_decode($entry['live_sync_remote_snapshot'], true) ?: [];
+        $remote   = $snapshot['fields'] ?? [];
+
+        $sets = []; $binds = [];
+        foreach (self::TRACKED_FIELDS as $key => $label) {
+            if (!in_array($key, $selectedFields, true)) continue;
+            if (!array_key_exists($key, $remote)) continue;
+            $sets[]  = "$key=?";
+            $binds[] = $remote[$key];
+        }
+        if ($sets) {
+            $binds[] = $entryId;
+            Database::execute('UPDATE entries SET ' . implode(',', $sets) . ' WHERE id=?', $binds);
+        }
+
+        $fetched = 0; $attachErrors = [];
+        if ($importAttachments) {
+            $sourceHost = trim(appSetting('live_sync_source_host'));
+            foreach ((array)($snapshot['new_attachments'] ?? []) as $att) {
+                $result = self::fetchOneAttachment($att, $entryId, $sourceHost);
+                if ($result['ok']) { $fetched++; } else { $attachErrors[] = $result['error']; }
+            }
+            if ($fetched) {
+                try { Database::execute('UPDATE entries SET attachments_updated_at=NOW() WHERE id=?', [$entryId]); } catch (Throwable) {}
+            }
+        }
+
+        Database::execute('UPDATE entries SET live_sync_has_changes=0 WHERE id=?', [$entryId]);
+
+        $result = ['ok' => true, 'fields_applied' => count($sets), 'attachments_synced' => $fetched];
         if ($attachErrors) $result['attachment_errors'] = $attachErrors;
         return $result;
     }

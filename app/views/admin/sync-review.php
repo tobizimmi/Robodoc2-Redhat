@@ -1,6 +1,6 @@
 <?php
 $csrf    = Auth::csrfToken();
-$total   = count($jiraEntries) + count($zentaoEntries);
+$total   = count($jiraEntries) + count($zentaoEntries) + count($liveSyncEntries ?? []);
 $priStyle= fn($p)=>(['Low'=>'secondary','Medium'=>'info','High'=>'warning','Highest'=>'orange','Blocker'=>'danger'][$p]??'secondary');
 $priCss  = fn($p)=>($priStyle($p)==='orange'?'background:#f97316':'background:var(--bs-'.$priStyle($p).')');
 ?>
@@ -31,6 +31,16 @@ $priCss  = fn($p)=>($priStyle($p)==='orange'?'background:#f97316':'background:va
         <li><button class="dropdown-item small" onclick="bulkAction('zentao','push')"><i class="bi bi-cloud-upload me-2 text-info"></i>Push all to Zentao</button></li>
         <li><hr class="dropdown-divider"></li>
         <li><button class="dropdown-item small text-muted" onclick="bulkAction('zentao','dismiss')"><i class="bi bi-eye-slash me-2"></i>Dismiss all (ignore)</button></li>
+      </ul>
+    </div>
+    <?php endif; ?>
+    <?php if (!empty($liveSyncEntries)): ?>
+    <div class="dropdown">
+      <button class="btn btn-outline-primary btn-sm dropdown-toggle" data-bs-toggle="dropdown"><i class="bi bi-arrow-repeat me-1"></i>All Live-Sync (<?= count($liveSyncEntries) ?>)</button>
+      <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
+        <li><button class="dropdown-item small" onclick="bulkAction('livesync','accept')"><i class="bi bi-cloud-download me-2 text-success"></i>Alle Änderungen + Anhänge übernehmen</button></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><button class="dropdown-item small text-muted" onclick="bulkAction('livesync','dismiss')"><i class="bi bi-eye-slash me-2"></i>Alle verwerfen (ignorieren)</button></li>
       </ul>
     </div>
     <?php endif; ?>
@@ -188,6 +198,79 @@ $priCss  = fn($p)=>($priStyle($p)==='orange'?'background:#f97316':'background:va
   </div>
 </div>
 <?php endif; ?>
+
+<!-- ── LIVE-SYNC CHANGES ──────────────────────────────────────── -->
+<?php if (!empty($liveSyncEntries)): ?>
+<div class="card mb-4">
+  <div class="card-header border-secondary d-flex align-items-center gap-2">
+    <i class="bi bi-arrow-repeat text-primary"></i>
+    <span class="fw-semibold">Live-Sync Changes</span>
+    <span class="badge bg-primary ms-1"><?= count($liveSyncEntries) ?></span>
+    <small class="text-muted ms-2">Einträge, deren Quelle sich seit dem Import geändert hat (manuell geprüft)</small>
+  </div>
+  <div class="list-group list-group-flush" id="livesyncList">
+    <?php foreach ($liveSyncEntries as $e):
+      $info    = $liveSyncDiffs[$e['id']] ?? ['diffs' => [], 'new_attachments' => []];
+      $diffs   = $info['diffs'];
+      $newAtts = $info['new_attachments'];
+    ?>
+    <div class="list-group-item bg-transparent border-secondary py-3 px-3" id="livesync-row-<?= $e['id'] ?>">
+      <div class="row align-items-start g-3">
+        <div class="col-md-3">
+          <div class="d-flex gap-2 align-items-start">
+            <span class="badge" style="background:<?= e($e['type_color']) ?>;font-size:.65rem;flex-shrink:0"><?= e($e['type_name']) ?></span>
+            <div>
+              <a href="<?= url('entries/'.$e['id']) ?>" class="fw-semibold text-white text-decoration-none" style="font-size:.85rem">
+                <?= e($e['title'] ?: '—') ?>
+              </a>
+              <div class="text-muted" style="font-size:.72rem"><?= e($e['project_name']) ?> · <?= formatDate($e['entry_date'],'d.m.Y') ?></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Differences with per-field checkboxes -->
+        <div class="col-md-6">
+          <?php if ($diffs || $newAtts): ?>
+          <div class="d-flex flex-column gap-1" id="livesync-fields-<?= $e['id'] ?>">
+            <?php foreach ($diffs as $d): ?>
+            <label class="d-flex align-items-center gap-2 small mb-0" style="cursor:pointer">
+              <input type="checkbox" class="form-check-input mt-0 livesync-field" value="<?= e($d['field']) ?>" checked>
+              <span class="text-muted fw-semibold" style="min-width:120px"><?= e($d['label']) ?></span>
+              <span class="badge bg-secondary text-truncate" style="max-width:160px"><?= e($d['local'] ?: '—') ?></span>
+              <i class="bi bi-arrow-right text-muted"></i>
+              <span class="badge bg-primary text-truncate" style="max-width:160px"><?= e($d['remote']) ?></span>
+            </label>
+            <?php endforeach; ?>
+            <?php if ($newAtts): ?>
+            <label class="d-flex align-items-center gap-2 small mb-0" style="cursor:pointer">
+              <input type="checkbox" class="form-check-input mt-0 livesync-attachments" checked>
+              <span class="text-muted fw-semibold" style="min-width:120px">Anhänge</span>
+              <span class="badge bg-primary"><?= count($newAtts) ?> neu auf der Quelle</span>
+            </label>
+            <?php endif; ?>
+          </div>
+          <?php else: ?>
+          <span class="text-muted small">Keine Feld-Differenz erkannt.</span>
+          <?php endif; ?>
+        </div>
+
+        <!-- Actions -->
+        <div class="col-md-3 d-flex gap-2 flex-wrap justify-content-end align-items-start">
+          <button class="btn btn-success btn-sm" onclick="liveSyncAccept(<?= $e['id'] ?>,this)"
+                  title="Ausgewählte Felder/Anhänge übernehmen">
+            <i class="bi bi-cloud-download me-1"></i>Ausgewählte übernehmen
+          </button>
+          <button class="btn btn-outline-secondary btn-sm" onclick="entryAction('livesync',<?= $e['id'] ?>,'dismiss',this)"
+                  title="Änderung verwerfen, lokale Werte bleiben unverändert">
+            <i class="bi bi-eye-slash me-1"></i>Verwerfen
+          </button>
+        </div>
+      </div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+</div>
+<?php endif; ?>
 <?php endif; ?>
 
 <div id="srToast" class="toast align-items-center position-fixed bottom-0 end-0 m-3 bg-dark border-secondary"
@@ -247,6 +330,33 @@ function entryAction(source, id, action, btn) {
     }
   })
   .catch(() => { btn.innerHTML = orig; btn.disabled = false; srToast('Network error', false); });
+}
+
+// Live-Sync "accept" needs which checkboxes were left checked, unlike Jira/Zentao's
+// plain accept-everything - gather them and post alongside the normal action call.
+function liveSyncAccept(id, btn) {
+  const orig = btn.innerHTML;
+  const scope = document.getElementById(`livesync-fields-${id}`);
+  const fields = scope ? [...scope.querySelectorAll('.livesync-field:checked')].map(c => c.value) : [];
+  const importAttachments = scope ? !!scope.querySelector('.livesync-attachments:checked') : false;
+  if (!fields.length && !importAttachments) { srToast('Nichts ausgewählt.', false); return; }
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+  const body = new URLSearchParams({ _csrf: _srCsrf });
+  fields.forEach(f => body.append('fields[]', f));
+  if (importAttachments) body.append('import_attachments', '1');
+  fetch(`<?= url('admin/sync-review/') ?>livesync/${id}/accept`, { method: 'POST', body })
+  .then(r => r.json())
+  .then(d => {
+    if (d.error) { btn.innerHTML = orig; btn.disabled = false; srToast(d.error, false); return; }
+    const row = document.getElementById(`livesync-row-${id}`);
+    if (row) { row.style.opacity = '.4'; setTimeout(() => row.remove(), 500); }
+    let msg = `${d.fields_applied} Feld(er) übernommen`;
+    if (importAttachments) msg += `, ${d.attachments_synced} Anhang/Anhänge`;
+    if (d.attachment_errors?.length) msg += ` (${d.attachment_errors.length} Fehler)`;
+    srToast(msg, !(d.attachment_errors?.length));
+  })
+  .catch(() => { btn.innerHTML = orig; btn.disabled = false; srToast('Netzwerkfehler', false); });
 }
 
 function bulkAction(source, action) {
