@@ -1307,6 +1307,7 @@ function getMigrations(): array {
         // Live-Sync: push newly created entries to another RoboDoc2 instance
         "ALTER TABLE entries ADD COLUMN IF NOT EXISTS live_origin_id INT UNSIGNED NULL DEFAULT NULL COMMENT 'entries.id on the sending instance, for idempotent re-sends'",
         "ALTER TABLE entries ADD UNIQUE INDEX IF NOT EXISTS uq_entries_live_origin (live_origin_id)",
+        "ALTER TABLE entry_attachments ADD COLUMN IF NOT EXISTS live_source_id INT UNSIGNED NULL DEFAULT NULL COMMENT 'entry_attachments.id on the sending instance, so a re-sync only fetches new attachments'",
         "CREATE TABLE IF NOT EXISTS live_sync_queue (
             id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             entry_id   INT UNSIGNED NOT NULL,
@@ -1351,6 +1352,13 @@ function runPortableMigrations(): void {
         $stmt->execute();
         if (!$stmt->fetchColumn()) {
             $pdo->exec("ALTER TABLE entries ADD UNIQUE INDEX uq_entries_live_origin (live_origin_id)");
+        }
+    } catch (\Throwable) {}
+    try {
+        $stmt = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='entry_attachments' AND COLUMN_NAME='live_source_id'");
+        $stmt->execute();
+        if (!$stmt->fetchColumn()) {
+            $pdo->exec("ALTER TABLE entry_attachments ADD COLUMN live_source_id INT UNSIGNED NULL DEFAULT NULL COMMENT 'entry_attachments.id on the sending instance, so a re-sync only fetches new attachments'");
         }
     } catch (\Throwable) {}
 }

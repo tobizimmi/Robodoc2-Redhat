@@ -20,6 +20,21 @@
   </div>
 </div>
 
+<?php if (!empty($s['live_sync_pull_source_url'])): ?>
+<div class="card mb-4" style="max-width:800px">
+  <div class="card-body p-3 d-flex align-items-center justify-content-between">
+    <div>
+      <div class="fw-semibold small">Manuell abrufen</div>
+      <div class="text-muted small">Fragt sofort beim Quell-System nach, statt auf den nächsten Cron-Lauf (alle 15 Min) zu warten.</div>
+    </div>
+    <form method="POST" action="<?= url('admin/live-sync/pull-now') ?>" class="ms-3">
+      <?= csrfField() ?>
+      <button type="submit" class="btn btn-outline-primary btn-sm"><i class="bi bi-arrow-repeat me-1"></i>Jetzt abrufen</button>
+    </form>
+  </div>
+</div>
+<?php endif; ?>
+
 <div class="alert alert-info small" style="max-width:800px">
   <i class="bi bi-info-circle me-1"></i>
   Überträgt neu erstellte Einträge (inkl. Fotos/Anhänge) automatisch von diesem System an ein anderes
@@ -89,7 +104,9 @@
     <i class="bi bi-exclamation-triangle me-1"></i>
     Voraussetzung: Projekte und Eintragstypen müssen auf beiden Systemen gleich benannt sein — die
     Zuordnung erfolgt über den Namen. Unbekannte Projekte/Typen werden abgelehnt, nicht automatisch angelegt.
-    Synchronisiert werden nur <strong>neu erstellte</strong> Einträge (kein Rückweg, keine nachträglichen Änderungen).
+    Synchronisiert werden <strong>neu erstellte</strong> Einträge (kein Rückweg). Später hinzugefügte
+    Fotos/Anhänge werden bei einem erneuten Abruf nachgeholt, andere nachträgliche Änderungen (Titel,
+    Status, Priorität, …) jedoch nicht.
     Zum Schutz vor Missbrauch/DoS sind alle Endpunkte pro Absender-IP begrenzt (max. 10 falsche Secret-Versuche
     bzw. 300 Anfragen pro 10/1 Minuten) und jeder Abhol-/Sende-Durchlauf ist auf 50 Einträge gedeckelt.
   </div>

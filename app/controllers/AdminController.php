@@ -498,6 +498,21 @@ class AdminController {
         redirect('/admin/live-sync');
     }
 
+    // -- Manual "Jetzt abrufen" button: runs the same pull the cron does, on
+    // demand, so testing/fixing a Pull-Hinweis doesn't mean waiting up to
+    // interval_min minutes for the next scheduled run.
+    public static function liveSyncPullNow(): void {
+        Auth::requireAdmin();
+        Auth::verifyCsrf();
+        $result = LiveSyncController::pullFromSource();
+        if ($result['error']) {
+            flash('warning', "Abgerufen: {$result['imported']} importiert, {$result['pending']} ausstehend. Hinweis: {$result['error']}");
+        } else {
+            flash('success', "Abgerufen: {$result['imported']} importiert" . ($result['pending'] ? ", {$result['pending']} ausstehend" : '') . '.');
+        }
+        redirect('/admin/live-sync');
+    }
+
     // ── Entry Types ───────────────────────────────────────────
     public static function entryTypes(): void {
         Auth::requireAdmin();

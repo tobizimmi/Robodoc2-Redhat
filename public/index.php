@@ -279,6 +279,7 @@ $router->any('/admin/zentao',        [AdminController::class, 'zentaoSettings'])
 $router->any('/admin/microsoft-sso', [AdminController::class, 'microsoftSsoSettings']);
 $router->any('/admin/live-sync',     [AdminController::class, 'liveSyncSettings']);
 $router->post('/admin/live-sync/toggle', [AdminController::class, 'liveSyncToggle']);
+$router->post('/admin/live-sync/pull-now', [AdminController::class, 'liveSyncPullNow']);
 $router->any('/admin/entry-types',   [AdminController::class, 'entryTypes']);
 $router->post('/admin/entry-types/{id}/delete', [AdminController::class, 'deleteEntryType']);
 $router->any('/admin/categories',    [AdminController::class, 'categories']);

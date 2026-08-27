@@ -381,6 +381,7 @@ class LiveSyncController
             'SELECT id, original_name, mime_type, file_size FROM entry_attachments WHERE entry_id = ?', [$entryId]
         );
         $atts = array_map(fn($a) => [
+            'source_id'     => (int)$a['id'],
             'original_name' => $a['original_name'],
             'mime_type'     => $a['mime_type'],
             'file_size'     => (int)$a['file_size'],
@@ -453,52 +454,67 @@ class LiveSyncController
             return ['ok' => false, 'error' => 'Bad request', 'code' => 400];
         }
 
-        // Idempotent: a retried/duplicate push or a re-listed pull for the same
-        // origin entry is a no-op.
+        // Idempotent for the entry itself: a retried/duplicate push or a re-listed
+        // pull for the same origin entry doesn't recreate it. Attachments are
+        // handled separately below (by source attachment id) so a re-sync - e.g.
+        // triggered by a photo uploaded after the entry was first created and
+        // already imported - can still pick up what's new without duplicating
+        // what's already there.
         $existing = Database::fetchOne('SELECT id FROM entries WHERE live_origin_id=?', [(int)$body['origin_id']]);
-        if ($existing) {
-            return ['ok' => true, 'entry_id' => (int)$existing['id'], 'attachments_synced' => 0, 'note' => 'already imported'];
-        }
+        $isNew = !$existing;
 
-        $project = Database::fetchOne('SELECT id FROM projects WHERE name=?', [(string)($body['project_name'] ?? '')]);
-        if (!$project) return ['ok' => false, 'error' => 'Unknown project: ' . ($body['project_name'] ?? '(none)'), 'code' => 422];
-        $entryType = Database::fetchOne('SELECT id FROM entry_types WHERE name=?', [(string)($body['entry_type_name'] ?? '')]);
-        if (!$entryType) return ['ok' => false, 'error' => 'Unknown entry type: ' . ($body['entry_type_name'] ?? '(none)'), 'code' => 422];
+        if ($isNew) {
+            $project = Database::fetchOne('SELECT id FROM projects WHERE name=?', [(string)($body['project_name'] ?? '')]);
+            if (!$project) return ['ok' => false, 'error' => 'Unknown project: ' . ($body['project_name'] ?? '(none)'), 'code' => 422];
+            $entryType = Database::fetchOne('SELECT id FROM entry_types WHERE name=?', [(string)($body['entry_type_name'] ?? '')]);
+            if (!$entryType) return ['ok' => false, 'error' => 'Unknown entry type: ' . ($body['entry_type_name'] ?? '(none)'), 'code' => 422];
 
-        $creator = !empty($body['creator_email'])
-            ? Database::fetchOne('SELECT id FROM users WHERE email=?', [$body['creator_email']])
-            : null;
+            $creator = !empty($body['creator_email'])
+                ? Database::fetchOne('SELECT id FROM users WHERE email=?', [$body['creator_email']])
+                : null;
 
-        $entryId = Database::insert(
-            'INSERT INTO entries (project_id, entry_type_id, entry_date, entry_time, title, description, status, priority,
-                mower_serial, firmware_version, app_version, project_status_robot, created_by, live_origin_id)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-            [
-                $project['id'], $entryType['id'],
-                $body['entry_date'] ?? date('Y-m-d'), $body['entry_time'] ?? '00:00:00',
-                $body['title'], $body['description'] ?? '', $body['status'] ?? 'new', $body['priority'] ?? 'Medium',
-                $body['mower_serial'] ?? null, $body['firmware_version'] ?? null, $body['app_version'] ?? null,
-                $body['project_status_robot'] ?? null, $creator['id'] ?? null, (int)$body['origin_id'],
-            ]
-        );
+            $entryId = Database::insert(
+                'INSERT INTO entries (project_id, entry_type_id, entry_date, entry_time, title, description, status, priority,
+                    mower_serial, firmware_version, app_version, project_status_robot, created_by, live_origin_id)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                [
+                    $project['id'], $entryType['id'],
+                    $body['entry_date'] ?? date('Y-m-d'), $body['entry_time'] ?? '00:00:00',
+                    $body['title'], $body['description'] ?? '', $body['status'] ?? 'new', $body['priority'] ?? 'Medium',
+                    $body['mower_serial'] ?? null, $body['firmware_version'] ?? null, $body['app_version'] ?? null,
+                    $body['project_status_robot'] ?? null, $creator['id'] ?? null, (int)$body['origin_id'],
+                ]
+            );
 
-        // Tags are low-risk (unlike projects/types) — auto-create if missing.
-        foreach ((array)($body['tags'] ?? []) as $tagName) {
-            $tagName = trim((string)$tagName);
-            if ($tagName === '') continue;
-            $tag   = Database::fetchOne('SELECT id FROM tags WHERE name=?', [$tagName]);
-            $tagId = $tag['id'] ?? Database::insert('INSERT INTO tags (name) VALUES (?)', [$tagName]);
-            Database::execute('INSERT IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?,?)', [$entryId, $tagId]);
+            // Tags are low-risk (unlike projects/types) — auto-create if missing.
+            foreach ((array)($body['tags'] ?? []) as $tagName) {
+                $tagName = trim((string)$tagName);
+                if ($tagName === '') continue;
+                $tag   = Database::fetchOne('SELECT id FROM tags WHERE name=?', [$tagName]);
+                $tagId = $tag['id'] ?? Database::insert('INSERT INTO tags (name) VALUES (?)', [$tagName]);
+                Database::execute('INSERT IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?,?)', [$entryId, $tagId]);
+            }
+        } else {
+            $entryId = (int)$existing['id'];
         }
 
         // Attachments: fetch each from its signed download URL (server-to-server), never
         // from a caller-supplied arbitrary host — the source host is allow-listed.
+        // Already-fetched ones (tracked by the source's own attachment id) are
+        // skipped, so re-processing an already-imported entry - e.g. because a
+        // photo was added after the initial creation - only fetches what's new.
+        $alreadyFetched = $isNew ? [] : array_column(
+            Database::fetchAll('SELECT live_source_id FROM entry_attachments WHERE entry_id=? AND live_source_id IS NOT NULL', [$entryId]),
+            'live_source_id'
+        );
         $sourceHost   = trim(appSetting('live_sync_source_host'));
         $fetched      = 0;
         $attachErrors = [];
         $attachments  = (array)($body['attachments'] ?? []);
         foreach ($attachments as $att) {
             $name = (string)($att['original_name'] ?? '(unbenannt)');
+            $sourceId = (int)($att['source_id'] ?? 0);
+            if ($sourceId && in_array($sourceId, $alreadyFetched, true)) continue;
             $url  = (string)($att['download_url'] ?? '');
             if (!$url) { $attachErrors[] = "$name: keine download_url im Payload"; continue; }
             $scheme = parse_url($url, PHP_URL_SCHEME);
@@ -533,8 +549,8 @@ class LiveSyncController
             if (@file_put_contents($dest, $bytes) === false) { $attachErrors[] = "$name: konnte lokal nicht gespeichert werden"; continue; }
 
             Database::insert(
-                'INSERT INTO entry_attachments (entry_id, filename, original_name, mime_type, file_size, file_path) VALUES (?,?,?,?,?,?)',
-                [$entryId, $fn, $att['original_name'] ?? $fn, $mime, strlen($bytes), $dest]
+                'INSERT INTO entry_attachments (entry_id, filename, original_name, mime_type, file_size, file_path, live_source_id) VALUES (?,?,?,?,?,?,?)',
+                [$entryId, $fn, $att['original_name'] ?? $fn, $mime, strlen($bytes), $dest, $sourceId ?: null]
             );
             $fetched++;
         }
@@ -543,6 +559,7 @@ class LiveSyncController
         }
 
         $result = ['ok' => true, 'entry_id' => $entryId, 'attachments_synced' => $fetched, 'attachments_total' => count($attachments)];
+        if (!$isNew) $result['note'] = $fetched ? 'entry already imported, fetched new attachments' : 'already imported';
         if ($attachErrors) $result['attachment_errors'] = $attachErrors;
         return $result;
     }

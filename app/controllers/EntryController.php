@@ -1377,6 +1377,15 @@ View::render('entries/edit', compact('entry','data','projects','entryTypes','cat
             $processFile($raw);
         }
 
+        // Live-Sync: an attachment added after initial creation (e.g. photo taken
+        // and uploaded later) is otherwise never picked up - creation is the only
+        // other trigger. ingestPayload() is dedup-safe per attachment (tracks
+        // already-fetched source attachment IDs), so re-queuing here is harmless
+        // even if this entry was already synced.
+        if ($results) {
+            try { LiveSyncController::pushEntry((int)$id); } catch (Throwable) {}
+        }
+
         echo json_encode(['success' => count($results), 'attachments' => $results, 'errors' => $errors]);
         exit;
     }
