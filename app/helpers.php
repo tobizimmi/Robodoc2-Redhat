@@ -1327,11 +1327,40 @@ function getMigrations(): array {
     ];
 }
 
+// Some MySQL/MariaDB versions (this instance's DB included) reject "ADD COLUMN
+// IF NOT EXISTS" / "CREATE INDEX IF NOT EXISTS" outright with a 1064 syntax
+// error - that's a much newer-MySQL-only syntax than most of this codebase's
+// migrations assume. Since each migration above is executed in its own
+// try/catch, such a statement just silently never applies, with no error
+// surfacing anywhere except later when the missing column/index is actually
+// used. This is a known, pre-existing, wide-reaching gap (165 of the
+// migrations above fail this way on this server) that needs a broader fix;
+// entries.live_origin_id is patched here specifically because Live-Sync
+// depends on it, using an information_schema check instead.
+function runPortableMigrations(): void {
+    $pdo = Database::get();
+    try {
+        $stmt = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='entries' AND COLUMN_NAME='live_origin_id'");
+        $stmt->execute();
+        if (!$stmt->fetchColumn()) {
+            $pdo->exec("ALTER TABLE entries ADD COLUMN live_origin_id INT UNSIGNED NULL DEFAULT NULL COMMENT 'entries.id on the sending instance, for idempotent re-sends'");
+        }
+    } catch (\Throwable) {}
+    try {
+        $stmt = $pdo->prepare("SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='entries' AND INDEX_NAME='uq_entries_live_origin'");
+        $stmt->execute();
+        if (!$stmt->fetchColumn()) {
+            $pdo->exec("ALTER TABLE entries ADD UNIQUE INDEX uq_entries_live_origin (live_origin_id)");
+        }
+    } catch (\Throwable) {}
+}
+
 function runMigrations(): void {
     $pdo = Database::get();
     foreach (getMigrations() as $sql) {
         try { $pdo->exec($sql); } catch (\Throwable) {}
     }
+    runPortableMigrations();
 }
 
 function runMigrationsReport(): array {
@@ -1346,6 +1375,8 @@ function runMigrationsReport(): array {
             $results[] = ['label' => $label, 'ok' => false, 'error' => $e->getMessage()];
         }
     }
+    runPortableMigrations();
+    $results[] = ['label' => 'Portable: entries.live_origin_id (+ unique index)', 'ok' => true];
     return $results;
 }
 
