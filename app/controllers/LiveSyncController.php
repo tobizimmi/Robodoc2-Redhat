@@ -532,6 +532,11 @@ class LiveSyncController
             curl_setopt_array($ch, [
                 CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT => 8,
                 CURLOPT_TIMEOUT => 30, CURLOPT_SSL_VERIFYPEER => true,
+                // Advertise + auto-decode gzip/deflate - without this, a server that
+                // compresses the response anyway (e.g. PHP's zlib.output_compression
+                // forced on regardless of Accept-Encoding) hands back bytes curl
+                // never unpacks, silently corrupting the saved file.
+                CURLOPT_ENCODING => '',
             ]);
             $bytes   = curl_exec($ch);
             $code    = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -540,6 +545,11 @@ class LiveSyncController
             if ($bytes === false) { $attachErrors[] = "$name: cURL-Fehler ($curlErr)"; continue; }
             if ($code !== 200) {
                 $attachErrors[] = "$name: HTTP $code beim Download ($url) - Antwort: " . substr(strip_tags((string)$bytes), 0, 200);
+                continue;
+            }
+            $expectedSize = (int)($att['file_size'] ?? 0);
+            if ($expectedSize > 0 && strlen($bytes) !== $expectedSize) {
+                $attachErrors[] = "$name: heruntergeladene Größe (" . strlen($bytes) . " Bytes) weicht von der Quelle ab ($expectedSize Bytes) - Download unvollständig oder beschädigt";
                 continue;
             }
 
