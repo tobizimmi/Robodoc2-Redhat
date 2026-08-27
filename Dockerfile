@@ -19,6 +19,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # against them were built by docker-php-ext-install, not apt), which breaks
 # those extensions at runtime with "cannot open shared object file" errors.
 
+# ── PHP upload limits ─────────────────────────────────────────────────────────
+# public/.user.ini exists for PHP-FPM/CGI deployments (Live/Staging), but this
+# image runs mod_php under Apache - .user.ini is NOT read by the apache2handler
+# SAPI, so without this override every upload silently falls back to PHP's
+# stock 8M post_max_size ("POST Content-Length ... exceeds the limit of
+# 8388608 bytes"), which then cascades into "headers already sent" everywhere
+# else in the request since that warning is emitted before any app code runs.
+RUN printf 'upload_max_filesize = 500M\npost_max_size = 512M\nmax_file_uploads = 50\nmemory_limit = 512M\nmax_execution_time = 300\nmax_input_time = 300\n' \
+    > /usr/local/etc/php/conf.d/zz-robodoc-uploads.ini
+
 # ── Apache: listen on 8080, serve from public/ ──────────────────────────────
 # OpenShift's default "restricted" SCC runs containers as an arbitrary,
 # non-root UID (with group 0) and never grants CAP_NET_BIND_SERVICE, so we
