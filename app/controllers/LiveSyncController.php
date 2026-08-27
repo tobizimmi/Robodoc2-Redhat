@@ -226,6 +226,9 @@ class LiveSyncController
             if ($result['ok']) {
                 $imported++;
                 $doneIds[] = $queueId;
+                if (!empty($result['attachment_errors'])) {
+                    $reasons[] = "Eintrag $entryId (importiert, aber Anhänge unvollständig): " . implode(' | ', $result['attachment_errors']);
+                }
             } else {
                 $reasons[] = "Eintrag $entryId: " . ($result['error'] ?? 'unbekannter Fehler');
             }
@@ -490,25 +493,36 @@ class LiveSyncController
 
         // Attachments: fetch each from its signed download URL (server-to-server), never
         // from a caller-supplied arbitrary host — the source host is allow-listed.
-        $sourceHost = trim(appSetting('live_sync_source_host'));
-        $fetched = 0;
-        foreach ((array)($body['attachments'] ?? []) as $att) {
-            $url = (string)($att['download_url'] ?? '');
-            if (!$url) continue;
+        $sourceHost   = trim(appSetting('live_sync_source_host'));
+        $fetched      = 0;
+        $attachErrors = [];
+        $attachments  = (array)($body['attachments'] ?? []);
+        foreach ($attachments as $att) {
+            $name = (string)($att['original_name'] ?? '(unbenannt)');
+            $url  = (string)($att['download_url'] ?? '');
+            if (!$url) { $attachErrors[] = "$name: keine download_url im Payload"; continue; }
             $scheme = parse_url($url, PHP_URL_SCHEME);
             $host   = parse_url($url, PHP_URL_HOST) ?: '';
-            if (!in_array($scheme, ['http', 'https'], true)) continue;
-            if ($sourceHost && strcasecmp($host, $sourceHost) !== 0) continue;
+            if (!in_array($scheme, ['http', 'https'], true)) {
+                $attachErrors[] = "$name: ungültige URL ($url) - fehlt Schema/Host? Ist 'app_url' in Admin > Settings auf der Quelle gesetzt?";
+                continue;
+            }
+            if ($sourceHost && strcasecmp($host, $sourceHost) !== 0) {
+                $attachErrors[] = "$name: Host '$host' nicht erlaubt (live_sync_source_host='$sourceHost')";
+                continue;
+            }
 
             $ch = curl_init($url);
             curl_setopt_array($ch, [
                 CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT => 8,
                 CURLOPT_TIMEOUT => 30, CURLOPT_SSL_VERIFYPEER => true,
             ]);
-            $bytes = curl_exec($ch);
-            $code  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $bytes   = curl_exec($ch);
+            $code    = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlErr = curl_error($ch);
             curl_close($ch);
-            if ($bytes === false || $code !== 200) continue;
+            if ($bytes === false) { $attachErrors[] = "$name: cURL-Fehler ($curlErr)"; continue; }
+            if ($code !== 200) { $attachErrors[] = "$name: HTTP $code beim Download"; continue; }
 
             $mime = (string)($att['mime_type'] ?? 'application/octet-stream');
             $ext  = self::MIME_EXT[$mime] ?? 'bin';
@@ -516,7 +530,7 @@ class LiveSyncController
             $dir  = UPLOAD_DIR . $entryId . '/';
             if (!is_dir($dir)) @mkdir($dir, 0755, true);
             $dest = $dir . $fn;
-            if (@file_put_contents($dest, $bytes) === false) continue;
+            if (@file_put_contents($dest, $bytes) === false) { $attachErrors[] = "$name: konnte lokal nicht gespeichert werden"; continue; }
 
             Database::insert(
                 'INSERT INTO entry_attachments (entry_id, filename, original_name, mime_type, file_size, file_path) VALUES (?,?,?,?,?,?)',
@@ -528,6 +542,8 @@ class LiveSyncController
             try { Database::execute('UPDATE entries SET attachments_updated_at=NOW() WHERE id=?', [$entryId]); } catch (Throwable) {}
         }
 
-        return ['ok' => true, 'entry_id' => $entryId, 'attachments_synced' => $fetched];
+        $result = ['ok' => true, 'entry_id' => $entryId, 'attachments_synced' => $fetched, 'attachments_total' => count($attachments)];
+        if ($attachErrors) $result['attachment_errors'] = $attachErrors;
+        return $result;
     }
 }
