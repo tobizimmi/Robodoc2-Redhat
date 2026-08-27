@@ -439,6 +439,11 @@ class LiveSyncController
         if (!$data || empty($data['att'])) { abort(404); }
         $att = Database::fetchOne('SELECT * FROM entry_attachments WHERE id=?', [(int)$data['att']]);
         if (!$att || !is_file($att['file_path'])) { abort(404); }
+        // Discard any output already buffered (e.g. stray whitespace after a
+        // closing PHP tag in a required file) - otherwise those bytes silently
+        // prepend to the binary response, corrupting it by exactly that many
+        // bytes while Content-Length still reports the correct file size.
+        while (ob_get_level() > 0) { ob_end_clean(); }
         header('Content-Type: ' . $att['mime_type']);
         header('Content-Length: ' . filesize($att['file_path']));
         header('Content-Disposition: inline; filename="' . basename($att['original_name']) . '"');
