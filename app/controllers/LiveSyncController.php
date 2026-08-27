@@ -538,7 +538,10 @@ class LiveSyncController
             $curlErr = curl_error($ch);
             curl_close($ch);
             if ($bytes === false) { $attachErrors[] = "$name: cURL-Fehler ($curlErr)"; continue; }
-            if ($code !== 200) { $attachErrors[] = "$name: HTTP $code beim Download"; continue; }
+            if ($code !== 200) {
+                $attachErrors[] = "$name: HTTP $code beim Download ($url) - Antwort: " . substr(strip_tags((string)$bytes), 0, 200);
+                continue;
+            }
 
             $mime = (string)($att['mime_type'] ?? 'application/octet-stream');
             $ext  = self::MIME_EXT[$mime] ?? 'bin';
