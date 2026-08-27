@@ -74,6 +74,12 @@ foreach ($builtIn as $job) {
     );
 }
 
+// Admin > Cron Jobs requires this file just to ensure the table/seed exist
+// before querying it, via a flag that skips actual execution - otherwise
+// merely opening that page to read a job's last run log could itself trigger
+// a new (empty) run and overwrite the very log being read.
+if (!defined('CRON_RUNNER_SCHEMA_ONLY')) {
+
 // Fetch active jobs
 $jobs = Database::fetchAll("SELECT * FROM cron_jobs WHERE is_active = 1");
 
@@ -106,4 +112,6 @@ foreach ($jobs as $job) {
         "UPDATE cron_jobs SET last_run_at=NOW(), last_run_ok=?, last_run_msg=? WHERE id=?",
         [$exitCode === 0 ? 1 : 0, $msg ?: 'OK', $job['id']]
     );
+}
+
 }

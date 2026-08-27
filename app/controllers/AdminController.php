@@ -728,7 +728,10 @@ class AdminController {
     // ── Cron Job Management ───────────────────────────────────────────────────
     public static function cronJobs(): void {
         Auth::requireAdmin();
-        // Ensure table + seed
+        // Ensure table + seed only - CRON_RUNNER_SCHEMA_ONLY stops runner.php from
+        // also executing due jobs, so merely viewing this page can't wipe out the
+        // run log a real cron invocation just wrote.
+        if (!defined('CRON_RUNNER_SCHEMA_ONLY')) define('CRON_RUNNER_SCHEMA_ONLY', true);
         require_once dirname(__DIR__) . '/cron/runner.php';
         $jobs = Database::fetchAll("SELECT * FROM cron_jobs ORDER BY label");
         View::render('admin/cron', compact('jobs'), 'app', ['title' => 'Cron Jobs']);
