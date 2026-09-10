@@ -486,6 +486,97 @@ class AdminController {
     }
 
     // -- One-click on/off, no need to open/resubmit the full settings form --
+    /**
+     * Requeue all entries missing from live_sync_queue.
+     * Also cleans up duplicate entries and queue entries.
+     */
+    public static function liveSyncRequeue(): void
+    {
+        Auth::requireAdmin();
+        Auth::verifyCsrf();
+        header('Content-Type: application/json');
+
+        $result = [
+            'ok'             => true,
+            'dupes_removed'  => 0,
+            'queue_dupes'    => 0,
+            'added'          => 0,
+            'reset'          => 0,
+            'pending'        => 0,
+        ];
+
+        // ── 1. Duplicate entries bereinigen (zentralisierte Methode) ─────────
+        try {
+            $dupeResult = LiveSyncController::cleanupDuplicates();
+            $result['dupes_removed'] = $dupeResult['removed'];
+        } catch (Throwable) {}
+
+        // ── 2. Duplicate Queue-Einträge bereinigen ───────────────────────────
+        try {
+            $queueDupes = Database::fetchAll(
+                'SELECT entry_id, GROUP_CONCAT(id ORDER BY id ASC) AS ids
+                 FROM live_sync_queue
+                 GROUP BY entry_id
+                 HAVING COUNT(*) > 1'
+            );
+            foreach ($queueDupes as $dupe) {
+                $ids = explode(',', $dupe['ids']);
+                array_shift($ids); // Ersten behalten
+                foreach ($ids as $deleteId) {
+                    try {
+                        Database::execute('DELETE FROM live_sync_queue WHERE id=?', [(int)$deleteId]);
+                        $result['queue_dupes']++;
+                    } catch (Throwable) {}
+                }
+            }
+        } catch (Throwable) {}
+
+        // ── 3. Fehlende Einträge zur Queue hinzufügen ────────────────────────
+        try {
+            $missing = Database::fetchAll(
+                'SELECT e.id FROM entries e
+                 LEFT JOIN live_sync_queue q ON q.entry_id = e.id
+                 WHERE q.id IS NULL
+                   AND (e.live_origin_id IS NULL OR e.live_origin_id = 0)
+                 ORDER BY e.id'
+            );
+            foreach ($missing as $row) {
+                try {
+                    Database::insert(
+                        'INSERT IGNORE INTO live_sync_queue (entry_id, status) VALUES (?, ?)',
+                        [(int)$row['id'], 'pending']
+                    );
+                    $result['added']++;
+                } catch (Throwable) {}
+            }
+        } catch (Throwable) {}
+
+        // ── 4. Fehlgeschlagene zurücksetzen ──────────────────────────────────
+        try {
+            $failed = Database::fetchOne(
+                "SELECT COUNT(*) c FROM live_sync_queue WHERE status='failed'"
+            );
+            $result['reset'] = (int)($failed['c'] ?? 0);
+            if ($result['reset'] > 0) {
+                Database::execute(
+                    "UPDATE live_sync_queue SET status='pending', attempts=0, last_error=NULL WHERE status='failed'"
+                );
+            }
+        } catch (Throwable) {}
+
+        // ── 5. Ausstehende zählen ─────────────────────────────────────────────
+        try {
+            $result['pending'] = (int)(Database::fetchOne(
+                "SELECT COUNT(*) c FROM live_sync_queue WHERE status='pending'"
+            )['c'] ?? 0);
+        } catch (Throwable) {}
+
+        Audit::log('live_sync_requeue', 'admin', 0,
+            "dupes={$result['dupes_removed']} queue_dupes={$result['queue_dupes']} added={$result['added']} reset={$result['reset']}");
+        echo json_encode($result);
+        exit;
+    }
+
     public static function liveSyncToggle(): void {
         Auth::requireAdmin();
         Auth::verifyCsrf();

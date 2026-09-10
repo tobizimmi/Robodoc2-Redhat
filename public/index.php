@@ -18,7 +18,10 @@ $router->any('/profile/2fa/setup',                [AuthController::class, 'setup
 $router->get('/profile/2fa/qr',                          [AuthController::class, 'qrCode']);
 $router->get('/profile/2fa/backup-codes',         [AuthController::class, 'backupCodes']);
 $router->post('/profile/2fa/disable',             [AuthController::class, 'disable2fa']);
-$router->get('/admin/nis2',                         [SecurityController::class, 'nis2']);
+$router->get('/admin/duplicates',                [DuplicateController::class, 'index']);
+        $router->post('/admin/duplicates/delete',     [DuplicateController::class, 'delete']);
+        $router->post('/admin/duplicates/delete-all', [DuplicateController::class, 'deleteAll']);
+        $router->get('/admin/nis2',                         [SecurityController::class, 'nis2']);
 $router->get('/admin/security',                   [SecurityController::class, 'index']);
 $router->post('/admin/security/ban',              [SecurityController::class, 'ban']);
 $router->post('/admin/security/kill-session/{id}', [SecurityController::class, 'killSession']);

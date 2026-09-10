@@ -30,6 +30,7 @@
     ['Checklists', 'Reusable test checklists', 'list-check', 'admin/checklists', 'pink'],
     ['Automatic Backup', 'DB + uploads, schedule, rotation', 'archive', 'admin/backup', 'success'],
     ['Cron Jobs', 'Automatische Hintergrundaufgaben verwalten', 'clock-history', 'admin/cron', 'info'],
+        ['Duplikate', 'Doppelte Einträge erkennen und bereinigen', 'copy', 'admin/duplicates', 'warning'],
         ['NIS2 Compliance', 'EU NIS2 & BSI Anforderungen prüfen', 'shield-check', 'admin/nis2', 'success'],
         ['Security', 'IP bans, failed logins, brute-force monitoring', 'shield-exclamation', 'admin/security', 'danger'],
         ['Export Templates', 'Define header, footer, branding for entry exports', 'file-earmark-richtext', 'admin/export-templates', 'info'],

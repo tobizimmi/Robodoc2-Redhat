@@ -55,7 +55,13 @@ class LiveSyncController
     {
         if (!self::liveSyncEnabled()) return; // master switch off - don't even queue
 
-        $queueId = Database::insert('INSERT INTO live_sync_queue (entry_id, status) VALUES (?,?)', [$entryId, 'pending']);
+        // INSERT IGNORE prevents duplicate queue entries if pushEntry is called multiple times
+        $queueId = Database::insert('INSERT IGNORE INTO live_sync_queue (entry_id, status) VALUES (?,?)', [$entryId, 'pending']);
+        if (!$queueId) {
+            // Already in queue — just get existing id
+            $existing = Database::fetchOne('SELECT id FROM live_sync_queue WHERE entry_id=?', [$entryId]);
+            $queueId = (int)($existing['id'] ?? 0);
+        }
 
         $targetUrl = trim(appSetting('live_sync_target_url'));
         $secret    = trim(Encryption::decrypt((string)appSetting('live_sync_secret')));
@@ -286,6 +292,56 @@ class LiveSyncController
 
     // ============================== shared =====================================
 
+    /**
+     * Remove duplicate entries on this instance (same live_origin_id).
+     * Keeps the oldest entry, deletes newer duplicates.
+     * Safe to call anytime — wrapped in try/catch.
+     */
+    public static function cleanupDuplicates(): array
+    {
+        $removed = 0;
+        try {
+            // Find all duplicate live_origin_ids
+            $dupes = Database::fetchAll(
+                'SELECT live_origin_id,
+                        MIN(id) AS keep_id,
+                        GROUP_CONCAT(id ORDER BY id ASC) AS all_ids
+                 FROM entries
+                 WHERE live_origin_id IS NOT NULL AND live_origin_id > 0
+                 GROUP BY live_origin_id
+                 HAVING COUNT(*) > 1'
+            );
+            foreach ($dupes as $dupe) {
+                $ids    = explode(',', $dupe['all_ids']);
+                $keepId = (int)array_shift($ids); // keep oldest
+                foreach ($ids as $deleteId) {
+                    $deleteId = (int)$deleteId;
+                    try {
+                        // Move attachments to kept entry
+                        Database::execute(
+                            'UPDATE entry_attachments SET entry_id=? WHERE entry_id=?',
+                            [$keepId, $deleteId]
+                        );
+                        // Move comments to kept entry
+                        Database::execute(
+                            'UPDATE entry_comments SET entry_id=? WHERE entry_id=?',
+                            [$keepId, $deleteId]
+                        );
+                        // Move history
+                        Database::execute(
+                            'UPDATE entry_history SET entry_id=? WHERE entry_id=?',
+                            [$keepId, $deleteId]
+                        );
+                        // Delete duplicate
+                        Database::execute('DELETE FROM entries WHERE id=?', [$deleteId]);
+                        $removed++;
+                    } catch (Throwable) {}
+                }
+            }
+        } catch (Throwable) {}
+        return ['removed' => $removed];
+    }
+
     private static function liveSyncEnabled(): bool
     {
         return appSetting('live_sync_enabled') === '1';
@@ -465,7 +521,28 @@ class LiveSyncController
         // triggered by a photo uploaded after the entry was first created and
         // already imported - can still pick up what's new without duplicating
         // what's already there.
-        $existing = Database::fetchOne('SELECT id FROM entries WHERE live_origin_id=?', [(int)$body['origin_id']]);
+        // Strict duplicate check — also check by title+date if origin_id=0
+        $originId = (int)($body['origin_id'] ?? 0);
+        $existing = $originId > 0
+            ? Database::fetchOne('SELECT id FROM entries WHERE live_origin_id=?', [$originId])
+            : null;
+        // Also check for duplicates by title+project to catch edge cases
+        if (!$existing && !empty($body['title'])) {
+            $existing = Database::fetchOne(
+                'SELECT e.id FROM entries e
+                 JOIN projects p ON p.id = e.project_id
+                 WHERE e.title = ? AND p.name = ? AND e.live_origin_id IS NOT NULL
+                 LIMIT 1',
+                [(string)$body['title'], (string)($body['project_name'] ?? '')]
+            );
+            if ($existing) {
+                // Fix missing live_origin_id
+                if ($originId > 0) {
+                    Database::execute('UPDATE entries SET live_origin_id=? WHERE id=?',
+                        [$originId, (int)$existing['id']]);
+                }
+            }
+        }
         $isNew = !$existing;
 
         if ($isNew) {
