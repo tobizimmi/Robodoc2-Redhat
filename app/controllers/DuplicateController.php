@@ -1,17 +1,12 @@
 <?php
 declare(strict_types=1);
 
-/**
- * Duplicate detection and resolution for entries.
- * Finds duplicates by: same title+project, same live_origin_id, or same title globally.
- */
 class DuplicateController
 {
     public static function index(): void
     {
         Auth::requireAdmin();
 
-        // 1. Duplikate per live_origin_id (importierte Einträge)
         $byOrigin = Database::fetchAll(
             'SELECT e.live_origin_id,
                     COUNT(*) cnt,
@@ -22,11 +17,9 @@ class DuplicateController
              WHERE e.live_origin_id IS NOT NULL AND e.live_origin_id > 0
              GROUP BY e.live_origin_id
              HAVING COUNT(*) > 1
-             ORDER BY cnt DESC
-             LIMIT 200'
+             ORDER BY cnt DESC LIMIT 200'
         );
 
-        // 2. Duplikate per Titel + Projekt
         $byTitle = Database::fetchAll(
             'SELECT e.title, e.project_id, p.name project_name,
                     COUNT(*) cnt,
@@ -39,15 +32,12 @@ class DuplicateController
              WHERE e.title IS NOT NULL AND e.title != ""
              GROUP BY e.title, e.project_id
              HAVING COUNT(*) > 1
-             ORDER BY cnt DESC, p.name, e.title
-             LIMIT 200'
+             ORDER BY cnt DESC, p.name, e.title LIMIT 200'
         );
 
-        // 3. Duplikate per Titel global (projektübergreifend, falls Projekt fehlt)
         $byTitleGlobal = Database::fetchAll(
             'SELECT e.title,
                     COUNT(*) cnt,
-                    COUNT(DISTINCT IFNULL(e.project_id,0)) projects,
                     GROUP_CONCAT(e.id ORDER BY e.id ASC SEPARATOR ",") ids,
                     GROUP_CONCAT(IFNULL(p.name,"kein Projekt") ORDER BY e.id ASC SEPARATOR "||") project_names,
                     GROUP_CONCAT(e.created_at ORDER BY e.id ASC SEPARATOR "||") dates
@@ -56,14 +46,12 @@ class DuplicateController
              WHERE e.title IS NOT NULL AND e.title != ""
              GROUP BY e.title
              HAVING COUNT(*) > 1 AND COUNT(DISTINCT IFNULL(e.project_id,0)) > 1
-             ORDER BY cnt DESC
-             LIMIT 100'
+             ORDER BY cnt DESC LIMIT 100'
         );
 
-        // Debug info
         $debug = [
-            'total_entries' => (int)(Database::fetchOne('SELECT COUNT(*) c FROM entries')['c'] ?? 0),
-            'with_origin'   => (int)(Database::fetchOne('SELECT COUNT(*) c FROM entries WHERE live_origin_id IS NOT NULL AND live_origin_id > 0')['c'] ?? 0),
+            'total_entries'    => (int)(Database::fetchOne('SELECT COUNT(*) c FROM entries')['c'] ?? 0),
+            'with_origin'      => (int)(Database::fetchOne('SELECT COUNT(*) c FROM entries WHERE live_origin_id IS NOT NULL AND live_origin_id > 0')['c'] ?? 0),
             'by_origin_groups' => count($byOrigin),
             'by_title_groups'  => count($byTitle),
             'by_title_global'  => count($byTitleGlobal),
@@ -78,6 +66,54 @@ class DuplicateController
         ]);
     }
 
+    /** Move all related data to keepId, then delete the duplicate */
+    private static function deleteEntry(int $deleteId, int $keepId): bool
+    {
+        if (!$deleteId || $deleteId === $keepId) return false;
+        // All tables that may reference entry_id
+        $tables = [
+            'entry_attachments', 'entry_comments', 'entry_history',
+            'entry_mowers', 'entry_tags', 'entry_sharepoint_files',
+            'entry_test_results', 'sprint_entries', 'kanban_notes',
+            'live_sync_queue', 'quick_captures', 'eight_d_reports',
+            'test_plan_item_entries', 'xray_entry_links',
+            'dismissed_zentao_bugs', 'test_customer_feedback',
+        ];
+        foreach ($tables as $table) {
+            try {
+                // Check if table has entry_id column
+                $cols = Database::fetchAll("SHOW COLUMNS FROM `$table` LIKE 'entry_id'");
+                if ($cols) {
+                    Database::execute(
+                        "UPDATE `$table` SET entry_id=? WHERE entry_id=?",
+                        [$keepId, $deleteId]
+                    );
+                }
+            } catch (Throwable) {}
+        }
+        // entry_links has from_entry_id and to_entry_id
+        try {
+            Database::execute('UPDATE entry_links SET from_entry_id=? WHERE from_entry_id=?', [$keepId, $deleteId]);
+            Database::execute('UPDATE entry_links SET to_entry_id=? WHERE to_entry_id=?', [$keepId, $deleteId]);
+        } catch (Throwable) {}
+        // Now delete — use FOREIGN KEY checks disabled as fallback
+        try {
+            Database::execute('DELETE FROM entries WHERE id=?', [$deleteId]);
+            return true;
+        } catch (Throwable $e) {
+            // If FK still blocks, force delete with checks off
+            try {
+                Database::execute('SET FOREIGN_KEY_CHECKS=0');
+                Database::execute('DELETE FROM entries WHERE id=?', [$deleteId]);
+                Database::execute('SET FOREIGN_KEY_CHECKS=1');
+                return true;
+            } catch (Throwable) {
+                Database::execute('SET FOREIGN_KEY_CHECKS=1');
+                return false;
+            }
+        }
+    }
+
     public static function delete(): void
     {
         Auth::requireAdmin();
@@ -88,13 +124,9 @@ class DuplicateController
             flash('error', 'Ungültige IDs.');
             redirect('/admin/duplicates');
         }
-        try { Database::execute('UPDATE entry_attachments SET entry_id=? WHERE entry_id=?', [$keepId, $id]); } catch (Throwable) {}
-        try { Database::execute('UPDATE entry_comments SET entry_id=? WHERE entry_id=?', [$keepId, $id]); } catch (Throwable) {}
-        try { Database::execute('UPDATE entry_history SET entry_id=? WHERE entry_id=?', [$keepId, $id]); } catch (Throwable) {}
-        try { Database::execute('UPDATE test_results SET entry_id=? WHERE entry_id=?', [$keepId, $id]); } catch (Throwable) {}
-        Database::execute('DELETE FROM entries WHERE id=?', [$id]);
-        Audit::log('duplicate_deleted', 'entry', $id, "Kept entry #$keepId");
-        flash('success', "Eintrag #$id gelöscht. Eintrag #$keepId behalten.");
+        $ok = self::deleteEntry($id, $keepId);
+        Audit::log('duplicate_deleted', 'entry', $id, "Kept #$keepId ok=$ok");
+        flash($ok ? 'success' : 'error', $ok ? "Eintrag #$id gelöscht." : "Fehler beim Löschen von #$id.");
         redirect('/admin/duplicates');
     }
 
@@ -104,27 +136,24 @@ class DuplicateController
         Auth::verifyCsrf();
         $mode    = $_POST['mode'] ?? 'title';
         $removed = 0;
+        $errors  = 0;
 
         if ($mode === 'origin') {
             $dupes = Database::fetchAll(
                 'SELECT MIN(id) keep_id, GROUP_CONCAT(id ORDER BY id ASC) ids
-                 FROM entries
-                 WHERE live_origin_id IS NOT NULL AND live_origin_id > 0
+                 FROM entries WHERE live_origin_id IS NOT NULL AND live_origin_id > 0
                  GROUP BY live_origin_id HAVING COUNT(*) > 1'
             );
         } elseif ($mode === 'title_global') {
             $dupes = Database::fetchAll(
                 'SELECT MIN(id) keep_id, GROUP_CONCAT(id ORDER BY id ASC) ids
-                 FROM entries
-                 WHERE title IS NOT NULL AND title != ""
+                 FROM entries WHERE title IS NOT NULL AND title != ""
                  GROUP BY title HAVING COUNT(*) > 1'
             );
         } else {
-            // by title + project
             $dupes = Database::fetchAll(
                 'SELECT MIN(id) keep_id, GROUP_CONCAT(id ORDER BY id ASC) ids
-                 FROM entries
-                 WHERE title IS NOT NULL AND title != ""
+                 FROM entries WHERE title IS NOT NULL AND title != ""
                  GROUP BY title, project_id HAVING COUNT(*) > 1'
             );
         }
@@ -133,20 +162,15 @@ class DuplicateController
             $ids    = explode(',', $dupe['ids']);
             $keepId = (int)array_shift($ids);
             foreach ($ids as $deleteId) {
-                $deleteId = (int)$deleteId;
-                try {
-                    Database::execute('UPDATE entry_attachments SET entry_id=? WHERE entry_id=?', [$keepId, $deleteId]);
-                    Database::execute('UPDATE entry_comments SET entry_id=? WHERE entry_id=?', [$keepId, $deleteId]);
-                    Database::execute('UPDATE entry_history SET entry_id=? WHERE entry_id=?', [$keepId, $deleteId]);
-                    Database::execute('UPDATE test_results SET entry_id=? WHERE entry_id=?', [$keepId, $deleteId]);
-                    Database::execute('DELETE FROM entries WHERE id=?', [$deleteId]);
-                    $removed++;
-                } catch (Throwable) {}
+                $ok = self::deleteEntry((int)$deleteId, $keepId);
+                $ok ? $removed++ : $errors++;
             }
         }
 
-        Audit::log('duplicates_bulk_deleted', 'admin', 0, "mode=$mode removed=$removed");
-        flash('success', "$removed Duplikate gelöscht.");
+        Audit::log('duplicates_bulk_deleted', 'admin', 0, "mode=$mode removed=$removed errors=$errors");
+        $msg = "$removed Duplikate gelöscht.";
+        if ($errors > 0) $msg .= " $errors konnten nicht gelöscht werden.";
+        flash($removed > 0 ? 'success' : 'warning', $msg);
         redirect('/admin/duplicates');
     }
 }
