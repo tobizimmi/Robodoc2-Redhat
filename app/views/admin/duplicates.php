@@ -4,6 +4,17 @@
   <h5 class="mb-0"><i class="bi bi-copy me-2 text-warning"></i>Duplikat-Erkennung</h5>
 </div>
 
+<!-- Debug Info -->
+<?php if (!empty($debug)): ?>
+<div class="alert alert-info small py-2 mb-3">
+  <strong>Debug:</strong>
+  Einträge gesamt: <strong><?= $debug['total_entries'] ?></strong> |
+  Mit Sync-Origin: <strong><?= $debug['with_origin'] ?></strong> |
+  Origin-Duplikatgruppen: <strong><?= $debug['by_origin_groups'] ?></strong> |
+  Titel-Duplikatgruppen: <strong><?= $debug['by_title_groups'] ?></strong> |
+  Titel-Global: <strong><?= $debug['by_title_global'] ?></strong>
+</div>
+<?php endif; ?>
 <!-- Stats -->
 <?php
 $totalByTitle  = count($byTitle);
@@ -37,6 +48,16 @@ $totalGroups   = $totalByTitle + $totalByOrigin;
 
 <!-- Bulk delete buttons -->
 <div class="d-flex gap-2 mb-4">
+    <?php if (!empty($byTitleGlobal)): ?>
+  <form method='POST' action='<?= url("admin/duplicates/delete-all") ?>'
+        onsubmit="return confirm('Alle globalen Titel-Duplikate löschen?')">
+    <input type='hidden' name='_csrf' value='<?= $csrf ?>'>
+    <input type='hidden' name='mode' value='title_global'>
+    <button class='btn btn-danger btn-sm'>
+      <i class='bi bi-trash me-1'></i>Alle globalen Titel-Duplikate löschen
+    </button>
+  </form>
+  <?php endif; ?>
   <?php if ($totalByOrigin > 0): ?>
   <form method="POST" action="<?= url('admin/duplicates/delete-all') ?>"
         onsubmit="return confirm('Alle <?= $totalByOrigin ?> Sync-Duplikate löschen? Älteste werden behalten.')">
