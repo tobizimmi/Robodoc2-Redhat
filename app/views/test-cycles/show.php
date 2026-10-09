@@ -114,7 +114,7 @@ $pct       = $total > 0 ? round($passed / $total * 100) : 0;
                 <?= e($run['name'] ?: 'Run #'.$run['id']) ?>
               </a>
             </td>
-            <td class="small text-muted"><?= e($run['tester_name'] ?? '—') ?></td>
+            <td class="small text-muted">—</td>
             <td class="text-success"><?= $rPassed ?></td>
             <td class="text-danger"><?= $rFailed ?></td>
             <td class="text-warning"><?= $rPending ?></td>

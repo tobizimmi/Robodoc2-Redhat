@@ -232,14 +232,12 @@ class ReportController
                     SUM(trr.status='pending') pending
              FROM test_runs tr
              LEFT JOIN test_run_results trr ON trr.test_run_id = tr.id
-             LEFT JOIN users u ON u.id = tr.executed_by
              WHERE tr.test_cycle_id = ?
              GROUP BY tr.id ORDER BY tr.created_at DESC", [$cycleId]
         );
 
         $failed = Database::fetchAll(
             "SELECT trr.*, tpi.name test_name, tpi.description test_desc,
-                    u.name tester_name,
                     GROUP_CONCAT(DISTINCT e.id ORDER BY e.id SEPARATOR ',') entry_ids,
                     GROUP_CONCAT(DISTINCT e.title ORDER BY e.id SEPARATOR '||') entry_titles
              FROM test_run_results trr
