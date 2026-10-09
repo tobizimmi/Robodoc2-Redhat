@@ -729,27 +729,84 @@ function synapseSync(runId, csrf) {
 </div>
 
 <div class="modal fade" id="bugModal" tabindex="-1">
-  <div class="modal-dialog"><div class="modal-content bg-dark border-secondary">
-    <div class="modal-header border-secondary py-2"><h6 class="modal-title"><i class="bi bi-bug me-1"></i>Bug verknuepfen</h6>
-      <button type="button" class="btn-close btn-close-white btn-sm" data-bs-dismiss="modal"></button></div>
+  <div class="modal-dialog modal-lg"><div class="modal-content bg-dark border-secondary">
+    <div class="modal-header border-secondary py-2">
+      <h6 class="modal-title"><i class="bi bi-bug me-1"></i>Bug verknüpfen / Neuen Bug erstellen</h6>
+      <button type="button" class="btn-close btn-close-white btn-sm" data-bs-dismiss="modal"></button>
+    </div>
     <div class="modal-body">
       <input type="hidden" id="bugResultId">
-      <p class="text-muted small mb-3">Verknuepfe einen RoboDoc-Eintrag. Die verlinkte Jira-ID wird beim SynapseRT-Sync exportiert.</p>
-      <div class="mb-3">
-        <label class="form-label small">RoboDoc Eintrag suchen</label>
-        <input type="text" id="bugEntrySearch" class="form-control form-control-sm" placeholder="Titel suchen..." oninput="searchBugEntries(this.value)">
-        <div id="bugEntryResults" class="mt-1" style="max-height:180px;overflow-y:auto"></div>
-        <div id="bugSelectedEntry" class="mt-2"></div>
-        <input type="hidden" id="bugEntryId">
+      <!-- Tabs -->
+      <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+          <button class="nav-link active" id="bugTabLinkBtn" onclick="bugTab('link')">
+            <i class="bi bi-link-45deg me-1"></i>Bestehenden verknüpfen
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" id="bugTabNewBtn" onclick="bugTab('new')">
+            <i class="bi bi-plus-circle me-1"></i>Neuen Bug erstellen
+          </button>
+        </li>
+      </ul>
+      <!-- Tab: Link existing -->
+      <div id="bugTabLinkPane">
+        <p class="text-muted small mb-3">Verknüpfe einen bestehenden RoboDoc-Eintrag oder Jira-Key als Bug.</p>
+        <div class="mb-3">
+          <label class="form-label small">RoboDoc Eintrag suchen</label>
+          <input type="text" id="bugEntrySearch" class="form-control form-control-sm" placeholder="Titel suchen..." oninput="searchBugEntries(this.value)">
+          <div id="bugEntryResults" class="mt-1" style="max-height:180px;overflow-y:auto"></div>
+          <div id="bugSelectedEntry" class="mt-2"></div>
+          <input type="hidden" id="bugEntryId">
+        </div>
+        <div>
+          <label class="form-label small">Oder direkt Jira Key eingeben</label>
+          <input type="text" id="bugJiraKey" class="form-control form-control-sm" placeholder="z.B. BRSQ-123">
+        </div>
       </div>
-      <div>
-        <label class="form-label small">Oder direkt Jira Key</label>
-        <input type="text" id="bugJiraKey" class="form-control form-control-sm" placeholder="z.B. BRSQ-123">
+      <!-- Tab: Create new bug -->
+      <div id="bugTabNewPane" style="display:none">
+        <p class="text-muted small mb-3">Erstellt einen neuen Eintrag und verknüpft ihn direkt als Bug mit diesem Test-Ergebnis.</p>
+        <div class="mb-2">
+          <label class="form-label small">Titel <span class="text-danger">*</span></label>
+          <input type="text" id="newBugTitle" class="form-control form-control-sm" placeholder="Bug-Titel...">
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small">Priorität</label>
+            <select id="newBugPriority" class="form-select form-select-sm">
+              <option value="critical">Kritisch</option>
+              <option value="high">Hoch</option>
+              <option value="medium" selected>Mittel</option>
+              <option value="low">Niedrig</option>
+            </select>
+          </div>
+          <div class="col-6">
+            <label class="form-label small">Status</label>
+            <select id="newBugStatus" class="form-select form-select-sm">
+              <option value="new" selected>Neu</option>
+              <option value="open">Offen</option>
+            </select>
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small">Beschreibung</label>
+          <textarea id="newBugDesc" class="form-control form-control-sm" rows="3" placeholder="Fehlerbeschreibung, Schritte zur Reproduktion..."></textarea>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small">Jira Key (optional)</label>
+          <input type="text" id="newBugJira" class="form-control form-control-sm" placeholder="z.B. BRSQ-123">
+        </div>
       </div>
     </div>
     <div class="modal-footer border-secondary py-2">
       <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Abbrechen</button>
-      <button class="btn btn-danger btn-sm" onclick="saveBug()"><i class="bi bi-bug me-1"></i>Verknuepfen</button>
+      <button class="btn btn-danger btn-sm" id="bugLinkBtn" onclick="saveBug()">
+        <i class="bi bi-link-45deg me-1"></i>Verknüpfen
+      </button>
+      <button class="btn btn-primary btn-sm" id="bugCreateBtn" onclick="createAndLinkBug()" style="display:none">
+        <i class="bi bi-plus-circle me-1"></i>Erstellen &amp; Verknüpfen
+      </button>
     </div>
   </div></div>
 </div>
@@ -776,8 +833,44 @@ function saveTester() {
   });
 }
 
+function bugTab(tab) {
+  document.getElementById('bugTabLinkPane').style.display = tab==='link'?'':'none';
+  document.getElementById('bugTabNewPane').style.display  = tab==='new'?'':'none';
+  document.getElementById('bugLinkBtn').style.display     = tab==='link'?'':'none';
+  document.getElementById('bugCreateBtn').style.display   = tab==='new'?'':'none';
+  document.getElementById('bugTabLinkBtn').classList.toggle('active', tab==='link');
+  document.getElementById('bugTabNewBtn').classList.toggle('active', tab==='new');
+}
+function createAndLinkBug() {
+  const rid   = document.getElementById('bugResultId').value;
+  const title = document.getElementById('newBugTitle').value.trim();
+  if (!title) { alert('Bitte Titel eingeben.'); return; }
+  const btn = document.getElementById('bugCreateBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Erstellen...';
+  fetch('<?= url("test-runs/") ?>' + _runId + '/results/' + rid + '/entry', {
+    method: 'POST',
+    headers: {'X-Requested-With': 'XMLHttpRequest'},
+    body: new URLSearchParams({
+      _csrf:       _bCsrf,
+      title:       title,
+      priority:    document.getElementById('newBugPriority').value,
+      status:      document.getElementById('newBugStatus').value,
+      description: document.getElementById('newBugDesc').value,
+      jira_key:    document.getElementById('newBugJira').value.trim().toUpperCase(),
+    })
+  }).then(r => r.json()).then(d => {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-plus-circle me-1"></i>Erstellen &amp; Verknüpfen';
+    if (d.success || d.entry_id) {
+      bootstrap.Modal.getInstance(document.getElementById('bugModal')).hide();
+      location.reload();
+    } else alert(d.error || 'Fehler beim Erstellen');
+  }).catch(e => { btn.disabled = false; alert('Netzwerkfehler: ' + e.message); });
+}
 function addBugModal(rid, csrf) {
   _bCsrf = csrf;
+  bugTab('link');
   document.getElementById('bugResultId').value = rid;
   ['bugEntrySearch','bugJiraKey'].forEach(id => document.getElementById(id).value = '');
   ['bugEntryResults','bugSelectedEntry'].forEach(id => document.getElementById(id).innerHTML = '');

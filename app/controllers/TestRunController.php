@@ -236,6 +236,24 @@ class TestRunController {
             EntryController::handleUploads($entryId, $_FILES['files']);
         }
 
+        // AJAX: return JSON + auto-link as bug
+        if (!empty($_SERVER['HTTP_X_REQUESTED_WITH'])) {
+            header('Content-Type: application/json');
+            $jiraKey = trim($_POST['jira_key'] ?? '');
+            try {
+                Database::insert(
+                    'INSERT IGNORE INTO test_run_bugs (test_run_result_id, entry_id, jira_key, created_by) VALUES (?,?,?,?)',
+                    [(int)$rid, $entryId, $jiraKey ?: null, Auth::id()]
+                );
+            } catch (Throwable) {}
+            // Also update result status to failed
+            try {
+                Database::execute('UPDATE test_run_results SET status=?,executed_by=?,executed_at=NOW() WHERE id=?',
+                    ['failed', Auth::id(), (int)$rid]);
+            } catch (Throwable) {}
+            echo json_encode(['success' => true, 'entry_id' => $entryId]);
+            exit;
+        }
         flash('success', 'Test entry created.');
         redirect('/test-runs/' . $id);
     }
