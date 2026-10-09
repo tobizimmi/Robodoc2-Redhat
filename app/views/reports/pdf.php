@@ -356,6 +356,154 @@ if ($curRow) $blockRows[] = $curRow;
 ?>
 <div class="block-col w-<?= htmlspecialchars($bw) ?>">
 
+<?php elseif ($btype === 'test_cycle_status'): ?>
+<?php
+$td = $data['testData'] ?? [];
+$ts2 = $td['stats'] ?? [];
+$tPassed  = (int)($ts2['passed']  ?? 0);
+$tFailed  = (int)($ts2['failed']  ?? 0);
+$tPending = (int)($ts2['pending'] ?? 0);
+$tSkipped = (int)($ts2['skipped'] ?? 0);
+$tBlocked = (int)($ts2['blocked'] ?? 0);
+$tTotal   = (int)($ts2['total']   ?? 0);
+$tPct     = $tTotal > 0 ? round($tPassed/$tTotal*100) : 0;
+$tCycle   = $td['cycle'] ?? [];
+?>
+<?php if ($tTotal > 0): ?>
+<div class="section no-break">
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Test-Status Übersicht') ?></div>
+  <?php if (!empty($tCycle['name'])): ?>
+  <div style="font-size:9px;color:#6b7280;margin-bottom:8px">
+    Cycle: <strong><?= htmlspecialchars($tCycle['name']) ?></strong>
+    <?php if (!empty($tCycle['plan_name'])): ?> · Plan: <?= htmlspecialchars($tCycle['plan_name']) ?><?php endif; ?>
+    <?php if (!empty($tCycle['environment'])): ?> · Umgebung: <?= htmlspecialchars($tCycle['environment']) ?><?php endif; ?>
+  </div>
+  <?php endif; ?>
+  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <?php
+    $pieColors = ['#10b981','#ef4444','#f59e0b','#3b82f6','#6b7280'];
+    $pieVals   = [$tPassed,$tFailed,$tPending,$tSkipped,$tBlocked];
+    $pieLabels = ['Bestanden','Fehlgeschlagen','Ausstehend','Übersprungen','Blockiert'];
+    $pieR = 40; $pieCx = 50; $pieCy = 50;
+    $pieStart = -M_PI/2;
+    $piePaths = '';
+    foreach ($pieVals as $pvi => $pval) {
+        if ($pval <= 0 || $tTotal <= 0) continue;
+        $pieAngle = ($pval/$tTotal) * 2 * M_PI;
+        $pieEnd   = $pieStart + $pieAngle;
+        $px1 = $pieCx + $pieR*cos($pieStart); $py1 = $pieCy + $pieR*sin($pieStart);
+        $px2 = $pieCx + $pieR*cos($pieEnd);   $py2 = $pieCy + $pieR*sin($pieEnd);
+        $pieLarge = $pieAngle > M_PI ? 1 : 0;
+        $piePaths .= "<path d=\"M{$pieCx},{$pieCy} L{$px1},{$py1} A{$pieR},{$pieR} 0 {$pieLarge},1 {$px2},{$py2} Z\" fill=\"{$pieColors[$pvi]}\"/>";
+        $pieStart = $pieEnd;
+    }
+    ?>
+    <svg width="100" height="100" viewBox="0 0 100 100" style="flex-shrink:0">
+      <?= $piePaths ?>
+      <circle cx="50" cy="50" r="22" fill="white"/>
+      <text x="50" y="47" text-anchor="middle" font-size="10" font-weight="bold" fill="#111"><?= $tPct ?>%</text>
+      <text x="50" y="57" text-anchor="middle" font-size="7" fill="#6b7280">bestanden</text>
+    </svg>
+    <div style="flex:1">
+      <?php foreach ($pieLabels as $pli => $plbl): ?>
+      <?php if ($pieVals[$pli] <= 0) continue; ?>
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;font-size:8px">
+        <div style="width:9px;height:9px;border-radius:2px;background:<?= $pieColors[$pli] ?>;flex-shrink:0"></div>
+        <span><?= htmlspecialchars($plbl) ?>: <strong><?= $pieVals[$pli] ?></strong> (<?= $tTotal>0?round($pieVals[$pli]/$tTotal*100):0 ?>%)</span>
+      </div>
+      <?php endforeach; ?>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">
+      <div style="background:#f0fdf4;border-radius:4px;padding:5px;text-align:center"><div style="font-size:14px;font-weight:800;color:#10b981"><?= $tPassed ?></div><div style="font-size:7px;color:#6b7280">Bestanden</div></div>
+      <div style="background:#fef2f2;border-radius:4px;padding:5px;text-align:center"><div style="font-size:14px;font-weight:800;color:#ef4444"><?= $tFailed ?></div><div style="font-size:7px;color:#6b7280">Fehlgeschl.</div></div>
+      <div style="background:#fffbeb;border-radius:4px;padding:5px;text-align:center"><div style="font-size:14px;font-weight:800;color:#f59e0b"><?= $tPending ?></div><div style="font-size:7px;color:#6b7280">Ausstehend</div></div>
+      <div style="background:#f9fafb;border-radius:4px;padding:5px;text-align:center"><div style="font-size:14px;font-weight:800;color:#374151"><?= $tTotal ?></div><div style="font-size:7px;color:#6b7280">Gesamt</div></div>
+    </div>
+  </div>
+  <?php if (!empty($td['runs'])): ?>
+  <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:8px">
+    <thead><tr style="background:#f3f4f6">
+      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb">Test Run</th>
+      <th style="padding:3px 6px;text-align:center;border:1px solid #e5e7eb;color:#10b981">✓</th>
+      <th style="padding:3px 6px;text-align:center;border:1px solid #e5e7eb;color:#ef4444">✗</th>
+      <th style="padding:3px 6px;text-align:center;border:1px solid #e5e7eb;color:#f59e0b">⏳</th>
+      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb">Tester</th>
+    </tr></thead>
+    <tbody>
+      <?php foreach ($td['runs'] as $trun): ?>
+      <tr>
+        <td style="padding:3px 6px;border:1px solid #e5e7eb"><?= htmlspecialchars($trun['name'] ?: 'Run #'.$trun['id']) ?></td>
+        <td style="padding:3px 6px;border:1px solid #e5e7eb;text-align:center;color:#10b981;font-weight:bold"><?= (int)($trun['passed']??0) ?></td>
+        <td style="padding:3px 6px;border:1px solid #e5e7eb;text-align:center;color:#ef4444;font-weight:bold"><?= (int)($trun['failed']??0) ?></td>
+        <td style="padding:3px 6px;border:1px solid #e5e7eb;text-align:center;color:#f59e0b"><?= (int)($trun['pending']??0) ?></td>
+        <td style="padding:3px 6px;border:1px solid #e5e7eb;color:#6b7280"><?= htmlspecialchars($trun['tester_name']??'—') ?></td>
+      </tr>
+      <?php endforeach; ?>
+    </tbody>
+  </table>
+  <?php endif; ?>
+</div>
+<?php else: ?><div class="section" style="background:#fff3cd;padding:8px;border-radius:4px;font-size:9px">⚠ Kein Test Cycle oder keine Ergebnisse vorhanden.</div><?php endif; ?>
+
+<?php elseif ($btype === 'test_cycle_results'): ?>
+<?php $td2 = $data['testData'] ?? []; $tcFailed = $td2['failed'] ?? []; ?>
+<?php if ($tcFailed): ?>
+<div class="section">
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Fehlgeschlagene Tests ('.count($tcFailed).')') ?></div>
+  <?php foreach ($tcFailed as $tcr): ?>
+  <?php $tcEids = $tcr['entry_ids'] ? explode(',', $tcr['entry_ids']) : []; $tcEtitles = $tcr['entry_titles'] ? explode('||', $tcr['entry_titles']) : []; ?>
+  <div style="margin-bottom:6px;padding:5px 7px;border-left:3px solid #ef4444;background:#fef2f2;border-radius:0 3px 3px 0">
+    <div style="font-size:9px;font-weight:700;color:#dc2626"><?= htmlspecialchars($tcr['test_name'] ?? 'Test #'.$tcr['id']) ?></div>
+    <?php if (!empty($tcr['notes'])): ?><div style="font-size:8px;color:#4b5563;margin-top:2px"><?= nl2br(htmlspecialchars($tcr['notes'])) ?></div><?php endif; ?>
+    <?php if ($tcEids): ?><div style="font-size:7px;color:#6b7280;margin-top:2px">Einträge: <?php foreach ($tcEids as $ei => $eid): ?><span style="background:#e5e7eb;border-radius:2px;padding:1px 3px;margin-right:2px">#<?= htmlspecialchars($eid) ?> <?= htmlspecialchars(substr($tcEtitles[$ei]??'',0,25)) ?></span><?php endforeach; ?></div><?php endif; ?>
+    <div style="font-size:7px;color:#9ca3af;margin-top:1px"><?= htmlspecialchars($tcr['tester_name']??'—') ?><?php if (!empty($tcr['executed_at'])): ?> · <?= substr($tcr['executed_at'],0,16) ?><?php endif; ?></div>
+  </div>
+  <?php endforeach; ?>
+</div>
+<?php else: ?><div class="section" style="background:#f0fdf4;padding:8px;border-radius:4px;font-size:9px;color:#15803d">✓ Keine fehlgeschlagenen Tests.</div><?php endif; ?>
+
+<?php elseif ($btype === 'test_cycle_open'): ?>
+<?php $td3 = $data['testData'] ?? []; $tcPending = $td3['pending'] ?? []; ?>
+<?php if ($tcPending): ?>
+<div class="section no-break">
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Offene Tests ('.count($tcPending).')') ?></div>
+  <table style="width:100%;border-collapse:collapse;font-size:8px">
+    <thead><tr style="background:#fffbeb"><th style="padding:3px 6px;text-align:left;border:1px solid #fde68a">Test Case</th><th style="padding:3px 6px;text-align:left;border:1px solid #fde68a">Beschreibung</th></tr></thead>
+    <tbody>
+      <?php foreach ($tcPending as $tcp): ?>
+      <tr><td style="padding:3px 6px;border:1px solid #e5e7eb;font-weight:600"><?= htmlspecialchars($tcp['test_name'] ?? '#'.$tcp['id']) ?></td><td style="padding:3px 6px;border:1px solid #e5e7eb;color:#6b7280"><?= htmlspecialchars(substr($tcp['test_desc']??'',0,80)) ?></td></tr>
+      <?php endforeach; ?>
+    </tbody>
+  </table>
+</div>
+<?php else: ?><div class="section" style="background:#f0fdf4;padding:8px;border-radius:4px;font-size:9px;color:#15803d">✓ Alle Tests ausgeführt.</div><?php endif; ?>
+
+<?php elseif ($btype === 'test_cycle_entries'): ?>
+<?php $td4 = $data['testData'] ?? []; $tcLinked = $td4['linkedEntries'] ?? []; ?>
+<?php if ($tcLinked): ?>
+<div class="section no-break">
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Verknüpfte Einträge ('.count($tcLinked).')') ?></div>
+  <table style="width:100%;border-collapse:collapse;font-size:8px">
+    <thead><tr style="background:#f3f4f6">
+      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb">Eintrag</th>
+      <th style="padding:3px 6px;border:1px solid #e5e7eb">Status</th>
+      <th style="padding:3px 6px;border:1px solid #e5e7eb">Prio</th>
+      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb">Test Cases</th>
+    </tr></thead>
+    <tbody>
+      <?php foreach ($tcLinked as $tcle): ?>
+      <tr>
+        <td style="padding:3px 6px;border:1px solid #e5e7eb;font-weight:600">#<?= $tcle['id'] ?> <?= htmlspecialchars(substr($tcle['title']??'',0,35)) ?></td>
+        <td style="padding:3px 6px;border:1px solid #e5e7eb"><span style="background:#e5e7eb;border-radius:2px;padding:1px 4px;font-size:7px"><?= htmlspecialchars($tcle['status']??'') ?></span></td>
+        <td style="padding:3px 6px;border:1px solid #e5e7eb;color:#6b7280;font-size:7px"><?= htmlspecialchars($tcle['priority']??'—') ?></td>
+        <td style="padding:3px 6px;border:1px solid #e5e7eb;color:#6b7280;font-size:7px"><?= htmlspecialchars(substr($tcle['test_names']??'',0,40)) ?></td>
+      </tr>
+      <?php endforeach; ?>
+    </tbody>
+  </table>
+</div>
+<?php else: ?><div class="section" style="background:#f9fafb;padding:8px;border-radius:4px;font-size:9px;color:#6b7280">Keine verknüpften Einträge.</div><?php endif; ?>
+
 <?php if ($btype === 'page_break'): ?>
 </div></div>
 <div class="page-break"></div>

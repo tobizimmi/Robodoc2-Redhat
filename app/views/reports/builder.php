@@ -118,6 +118,26 @@ $schedUrl = url('reports/schedules/');
               </select>
             </div>
             <div class="col-md-6">
+              <label class="form-label"><i class="bi bi-shield-check me-1 text-info"></i>Test Plan (optional)</label>
+              <select name="test_plan_id" id="rdGenTestPlan" class="form-select" onchange="rdLoadCycles(this.value)">
+
+                <option value="">Kein Test Plan</option>
+                <?php
+                $testPlans = Database::fetchAll('SELECT tp.id, tp.name, p.name project_name FROM test_plans tp LEFT JOIN projects p ON p.id=tp.project_id ORDER BY p.name, tp.name');
+                foreach ($testPlans as $tp): ?>
+                <option value="<?= $tp['id'] ?>"><?= e($tp['project_name'] . ' › ' . $tp['name']) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="mb-2">
+              <label class="form-label small">Test Cycle (für Test-Blöcke)</label>
+              <select name="test_cycle_id" id="rdGenTestCycle" class="form-select">
+                <option value="">— Cycle wählen —</option>
+              </select>
+            </div>
+
+            </div>
+            <div class="col-md-6">
               <label class="form-label">Datum von</label>
               <input type="date" name="date_from" id="rdGenFrom" class="form-control">
             </div>
@@ -440,8 +460,26 @@ var RD_DEFS = {
   text:           {l:'Textblock',              i:'bi-text-paragraph',       c:'#6b7280', d:'Freier Textabsatz'},
   divider:        {l:'Trennlinie',             i:'bi-dash-lg',              c:'#4b5563', d:'Horizontale Trennlinie'},
   page_break:     {l:'Seitenumbruch',          i:'bi-file-break',           c:'#4b5563', d:'Umbruch beim PDF-Druck'},
+  test_cycle_status:  {l:'Test: Status-Übersicht',   i:'bi-pie-chart-fill',   c:'#10b981', d:'Pie Chart mit Passed/Failed/Pending/Blocked'},
+  test_cycle_results: {l:'Test: Fehlgeschlagene',    i:'bi-x-circle-fill',    c:'#ef4444', d:'Fehlgeschlagene Tests mit Notizen und verlinkten Einträgen'},
+  test_cycle_open:    {l:'Test: Offene Tests',       i:'bi-clock-fill',       c:'#f59e0b', d:'Noch nicht ausgeführte Test Cases'},
+  test_cycle_entries: {l:'Test: Verknüpfte Einträge',i:'bi-link-45deg',       c:'#6366f1', d:'Einträge die mit Test Cases verknüpft sind'},
 };
 
+function rdLoadCycles(planId) {
+  var sel = document.getElementById('rdGenTestCycle');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Wird geladen...</option>';
+  fetch('<?= url('api/test-cycles') ?>?plan_id='+planId)
+    .then(r=>r.json())
+    .then(function(cycles){
+      sel.innerHTML = '<option value="">— Cycle wählen —</option>';
+      cycles.forEach(function(c){
+        sel.innerHTML += '<option value="'+c.id+'">'+rdEsc(c.name)+' ('+rdEsc(c.status)+')</option>';
+      });
+    })
+    .catch(function(){ sel.innerHTML = '<option value="">Fehler beim Laden</option>'; });
+}
 function rdGv(id){ var e=document.getElementById(id); return e?e.value:''; }
 function rdGc(id){ var e=document.getElementById(id); return e?e.checked:false; }
 function rdSv(id,v){ var e=document.getElementById(id); if(e)e.value=(v!=null?v:''); }

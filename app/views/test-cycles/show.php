@@ -1,129 +1,249 @@
 <?php
-$csrf    = Auth::csrfToken();
-$canEdit = Auth::canEdit('testing');
-
-// Compute totals
-$totR = 0; $totP = 0; $totF = 0; $totPend = 0;
-foreach ($runs as $r) {
-    $totR    += (int)$r['result_count'];
-    $totP    += (int)$r['passed'];
-    $totF    += (int)$r['failed'];
-    $totPend += (int)$r['pending'];
-}
-$pct = $totR > 0 ? round($totP / $totR * 100) : 0;
-$cb = match($cycle['status']??'planned') { 'active'=>'info','completed'=>'success','aborted'=>'danger',default=>'secondary' };
+$csrf      = Auth::csrfToken();
+$passed    = (int)($stats['passed']  ?? 0);
+$failed    = (int)($stats['failed']  ?? 0);
+$pending   = (int)($stats['pending'] ?? 0);
+$skipped   = (int)($stats['skipped'] ?? 0);
+$blocked   = (int)($stats['blocked'] ?? 0);
+$total     = (int)($stats['total']   ?? 0);
+$pct       = $total > 0 ? round($passed / $total * 100) : 0;
 ?>
 
-<div class="d-flex align-items-start justify-content-between mb-4">
-  <div class="d-flex align-items-center gap-2">
-    <a href="<?= url('test-plans/' . $cycle['plan_id']) ?>" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
-    <div>
-      <h5 class="mb-0 fw-bold"><?= e($cycle['name']) ?></h5>
-      <small class="text-muted">
-        <a href="<?= url('test-plans/' . $cycle['plan_id']) ?>" class="text-muted"><?= e($cycle['plan_name']) ?></a>
-        &middot; <span class="badge bg-<?= $cb ?>"><?= e($cycle['status']??'planned') ?></span>
-        <?php if ($cycle['environment']): ?>&middot; <i class="bi bi-display me-1"></i><?= e($cycle['environment']) ?><?php endif; ?>
-        <?php if ($cycle['build']): ?>&middot; Build: <?= e($cycle['build']) ?><?php endif; ?>
-      </small>
-    </div>
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <div>
+    <h5 class="mb-0"><?= e($cycle['name']) ?></h5>
+    <small class="text-muted">
+      <a href="<?= url('test-plans/'.$cycle['plan_id']) ?>"><?= e($cycle['plan_name']) ?></a>
+      <?php if ($cycle['environment']): ?> · <?= e($cycle['environment']) ?><?php endif; ?>
+      <?php if ($cycle['build']): ?> · Build: <?= e($cycle['build']) ?><?php endif; ?>
+    </small>
   </div>
   <div class="d-flex gap-2">
-    <?php if ($canEdit): ?>
-    <a href="<?= url('test-cycles/' . $cycle['id'] . '/edit') ?>" class="btn btn-outline-secondary btn-sm"><i class="bi bi-pencil me-1"></i>Bearbeiten</a>
-    <a href="<?= url('test-runs/create?plan_id=' . $cycle['plan_id'] . '&cycle_id=' . $cycle['id']) ?>" class="btn btn-primary btn-sm">
-      <i class="bi bi-play me-1"></i>Neuer Test Run
-    </a>
+    <?php
+    $statusColors = ['planned'=>'secondary','active'=>'primary','completed'=>'success','aborted'=>'danger'];
+    $sc = $statusColors[$cycle['status']] ?? 'secondary';
+    ?>
+    <span class="badge bg-<?= $sc ?> fs-6"><?= e(ucfirst($cycle['status'])) ?></span>
+  </div>
+</div>
+
+<!-- ── PIE CHART + STATS ──────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+  <!-- Pie Chart -->
+  <div class="col-md-4">
+    <div class="card border-secondary h-100">
+      <div class="card-header border-secondary fw-semibold">
+        <i class="bi bi-pie-chart me-2"></i>Test-Übersicht
+      </div>
+      <div class="card-body d-flex flex-column align-items-center justify-content-center">
+        <?php if ($total > 0): ?>
+        <canvas id="testPieChart" width="200" height="200"></canvas>
+        <div class="mt-2 text-center">
+          <div class="fw-bold fs-4"><?= $pct ?>%</div>
+          <div class="text-muted small">bestanden</div>
+        </div>
+        <?php else: ?>
+        <p class="text-muted small">Noch keine Testergebnisse</p>
+        <?php endif; ?>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats Cards -->
+  <div class="col-md-8">
+    <div class="row g-2 h-100">
+      <?php
+      $statCards = [
+        ['label'=>'Gesamt',    'value'=>$total,   'color'=>'secondary', 'icon'=>'list-check'],
+        ['label'=>'Bestanden', 'value'=>$passed,  'color'=>'success',   'icon'=>'check-circle-fill'],
+        ['label'=>'Fehlgeschl.','value'=>$failed, 'color'=>'danger',    'icon'=>'x-circle-fill'],
+        ['label'=>'Ausstehend','value'=>$pending, 'color'=>'warning',   'icon'=>'clock'],
+        ['label'=>'Übersprungen','value'=>$skipped,'color'=>'info',     'icon'=>'skip-forward'],
+        ['label'=>'Blockiert', 'value'=>$blocked, 'color'=>'dark',      'icon'=>'slash-circle'],
+      ];
+      ?>
+      <?php foreach ($statCards as $sc2): ?>
+      <div class="col-6 col-lg-4">
+        <div class="card border-<?= $sc2['color'] ?> text-center py-2">
+          <div class="text-<?= $sc2['color'] ?>" style="font-size:1.8rem;font-weight:700">
+            <?= $sc2['value'] ?>
+          </div>
+          <div class="text-muted small">
+            <i class="bi bi-<?= $sc2['icon'] ?> me-1"></i><?= $sc2['label'] ?>
+          </div>
+        </div>
+      </div>
+      <?php endforeach; ?>
+    </div>
+  </div>
+</div>
+
+<!-- ── TEST RUNS ──────────────────────────────────────────────────── -->
+<div class="card border-secondary mb-4">
+  <div class="card-header border-secondary fw-semibold">
+    <i class="bi bi-play-circle me-2"></i>Test Runs (<?= count($runs) ?>)
+  </div>
+  <div class="card-body p-0">
+    <?php if (!$runs): ?>
+    <p class="text-muted small p-3">Noch keine Test Runs in diesem Cycle.</p>
+    <?php else: ?>
+    <div class="table-responsive">
+      <table class="table table-sm table-dark table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Name</th><th>Tester</th>
+            <th class="text-success">✓</th>
+            <th class="text-danger">✗</th>
+            <th class="text-warning">⏳</th>
+            <th class="text-info">↷</th>
+            <th>Fortschritt</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php foreach ($runs as $run):
+            $rTotal   = (int)$run['result_count'];
+            $rPassed  = (int)$run['passed'];
+            $rFailed  = (int)$run['failed'];
+            $rPending = (int)$run['pending'];
+            $rSkipped = (int)$run['skipped'];
+            $rPct     = $rTotal > 0 ? round($rPassed/$rTotal*100) : 0;
+          ?>
+          <tr>
+            <td>
+              <a href="<?= url('test-runs/'.$run['id']) ?>">
+                <?= e($run['name'] ?: 'Run #'.$run['id']) ?>
+              </a>
+            </td>
+            <td class="small text-muted"><?= e($run['tester_name'] ?? '—') ?></td>
+            <td class="text-success"><?= $rPassed ?></td>
+            <td class="text-danger"><?= $rFailed ?></td>
+            <td class="text-warning"><?= $rPending ?></td>
+            <td class="text-info"><?= $rSkipped ?></td>
+            <td style="min-width:120px">
+              <div class="progress" style="height:8px">
+                <div class="progress-bar bg-success" style="width:<?= $rPct ?>%"></div>
+                <div class="progress-bar bg-danger"
+                     style="width:<?= $rTotal>0?round($rFailed/$rTotal*100):0 ?>%"></div>
+              </div>
+              <small class="text-muted"><?= $rPct ?>%</small>
+            </td>
+          </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
     <?php endif; ?>
   </div>
 </div>
 
-<!-- Progress -->
-<?php if ($totR > 0): ?>
-<div class="card mb-4">
-  <div class="card-body py-2">
-    <div class="d-flex align-items-center gap-3">
-      <div class="flex-grow-1">
-        <div class="d-flex justify-content-between small mb-1">
-          <span class="text-muted fw-semibold">Fortschritt</span>
-          <span><?= $totP ?>/<?= $totR ?> &middot; <strong><?= $pct ?>%</strong></span>
-        </div>
-        <div class="progress" style="height:8px">
-          <div class="progress-bar bg-success" style="width:<?= $pct ?>%"></div>
-          <div class="progress-bar bg-danger" style="width:<?= $totR>0?round($totF/$totR*100):0 ?>%"></div>
+<!-- ── FEHLGESCHLAGENE TESTS ──────────────────────────────────────── -->
+<?php if ($failedResults): ?>
+<div class="card border-danger mb-4">
+  <div class="card-header border-danger d-flex align-items-center justify-content-between">
+    <span class="fw-semibold text-danger">
+      <i class="bi bi-x-circle me-2"></i>Fehlgeschlagene Tests (<?= count($failedResults) ?>)
+    </span>
+  </div>
+  <div class="card-body p-0">
+    <?php foreach ($failedResults as $r):
+      $entryIds    = $r['entry_ids']    ? explode(',', $r['entry_ids'])    : [];
+      $entryTitles = $r['entry_titles'] ? explode('||', $r['entry_titles']) : [];
+    ?>
+    <div class="p-3 border-bottom border-secondary">
+      <div class="d-flex align-items-start gap-2">
+        <span class="badge bg-danger mt-1">FAIL</span>
+        <div class="flex-grow-1">
+          <div class="fw-semibold"><?= e($r['test_name'] ?? 'Test #'.$r['id']) ?></div>
+          <?php if ($r['notes']): ?>
+          <div class="text-muted small mt-1">
+            <i class="bi bi-chat-left-text me-1"></i><?= nl2br(e($r['notes'])) ?>
+          </div>
+          <?php endif; ?>
+          <?php if ($r['test_desc']): ?>
+          <div class="text-muted small mt-1 fst-italic"><?= e(substr($r['test_desc'],0,120)) ?></div>
+          <?php endif; ?>
+          <?php if ($entryIds): ?>
+          <div class="mt-2 d-flex flex-wrap gap-1">
+            <span class="text-muted small me-1"><i class="bi bi-link me-1"></i>Verknüpfte Einträge:</span>
+            <?php foreach ($entryIds as $i => $eid): ?>
+            <a href="<?= url('entries/'.$eid) ?>" target="_blank"
+               class="badge bg-secondary text-decoration-none">
+              #<?= e($eid) ?> <?= e(substr($entryTitles[$i] ?? '', 0, 30)) ?>
+            </a>
+            <?php endforeach; ?>
+          </div>
+          <?php endif; ?>
+          <div class="text-muted small mt-1">
+            <?= e($r['tester_name'] ?? '—') ?>
+            <?php if ($r['executed_at']): ?>
+            · <?= date('d.m.Y H:i', strtotime($r['executed_at'])) ?>
+            <?php endif; ?>
+          </div>
         </div>
       </div>
-      <div class="d-flex gap-3 text-center flex-shrink-0" style="font-size:.75rem">
-        <div><div class="fw-bold text-success"><?= $totP ?></div><div class="text-muted">ok</div></div>
-        <div><div class="fw-bold text-danger"><?= $totF ?></div><div class="text-muted">fail</div></div>
-        <div><div class="fw-bold text-warning"><?= $totPend ?></div><div class="text-muted">offen</div></div>
-      </div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+</div>
+<?php endif; ?>
+
+<!-- ── OFFENE TESTS ───────────────────────────────────────────────── -->
+<?php if ($pendingResults): ?>
+<div class="card border-warning mb-4">
+  <div class="card-header border-warning d-flex align-items-center justify-content-between">
+    <span class="fw-semibold">
+      <i class="bi bi-clock me-2 text-warning"></i>Offene Tests (<?= count($pendingResults) ?>)
+    </span>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-dark mb-0">
+        <thead><tr><th>Test Case</th><th>Beschreibung</th></tr></thead>
+        <tbody>
+          <?php foreach ($pendingResults as $r): ?>
+          <tr>
+            <td class="fw-semibold"><?= e($r['test_name'] ?? 'Test #'.$r['id']) ?></td>
+            <td class="small text-muted"><?= e(substr($r['test_desc'] ?? '', 0, 100)) ?></td>
+          </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
     </div>
   </div>
 </div>
 <?php endif; ?>
 
-<!-- Test Runs -->
-<div class="card">
-  <div class="card-header border-secondary d-flex align-items-center gap-2">
-    <span class="fw-semibold small"><i class="bi bi-play-circle me-1"></i>Test Runs <span class="badge bg-secondary"><?= count($runs) ?></span></span>
-    <?php if ($canEdit): ?>
-    <a href="<?= url('test-runs/create?plan_id='.$cycle['plan_id'].'&cycle_id='.$cycle['id']) ?>" class="btn btn-outline-success btn-sm py-0 ms-auto"><i class="bi bi-plus-lg me-1"></i>Neuer Run</a>
-    <?php endif; ?>
-  </div>
-  <?php if ($runs): ?>
-  <div class="table-responsive">
-    <table class="table table-dark table-hover align-middle mb-0" style="font-size:.83rem">
-      <thead class="text-muted" style="font-size:.72rem">
-        <tr><th>Name</th><th>Status</th><th>Ergebnisse</th><th>Fortschritt</th><th>Erstellt</th><th></th></tr>
-      </thead>
-      <tbody>
-        <?php foreach ($runs as $r):
-          $rb = match($r['status']) { 'active'=>'info','completed'=>'success','aborted'=>'danger',default=>'secondary' };
-          $rpct = (int)$r['result_count'] > 0 ? round((int)$r['passed'] / (int)$r['result_count'] * 100) : 0;
-        ?>
-        <tr>
-          <td><a href="<?= url('test-runs/'.$r['id']) ?>" class="text-white fw-semibold text-decoration-none"><?= e($r['name']) ?></a></td>
-          <td><span class="badge bg-<?= $rb ?>"><?= e($r['status']) ?></span></td>
-          <td class="text-muted small">
-            <span class="text-success"><?= (int)$r['passed'] ?></span> /
-            <span class="text-danger"><?= (int)$r['failed'] ?></span> /
-            <?= (int)$r['result_count'] ?> total
-          </td>
-          <td style="min-width:80px">
-            <?php if ($r['result_count'] > 0): ?>
-            <div class="progress" style="height:5px">
-              <div class="progress-bar bg-success" style="width:<?= $rpct ?>%"></div>
-            </div>
-            <span class="text-muted" style="font-size:.7rem"><?= $rpct ?>%</span>
-            <?php endif; ?>
-          </td>
-          <td class="text-muted small"><?= formatDate($r['created_at'],'d.m.Y') ?></td>
-          <td>
-            <a href="<?= url('test-runs/'.$r['id']) ?>" class="btn btn-outline-secondary btn-sm py-0 px-2"><i class="bi bi-eye"></i></a>
-          </td>
-        </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
-  </div>
-  <?php else: ?>
-  <div class="card-body text-muted small text-center py-4">
-    <i class="bi bi-play-circle fs-2 d-block mb-2 opacity-25"></i>
-    Noch keine Test Runs in diesem Cycle.
-    <?php if ($canEdit): ?>
-    <div class="mt-2"><a href="<?= url('test-runs/create?plan_id='.$cycle['plan_id'].'&cycle_id='.$cycle['id']) ?>" class="btn btn-primary btn-sm"><i class="bi bi-play me-1"></i>Test Run starten</a></div>
-    <?php endif; ?>
-  </div>
-  <?php endif; ?>
-</div>
-
-<!-- Synapse info -->
-<?php if ($cycle['synapse_cycle_id']): ?>
-<div class="card mt-3">
-  <div class="card-header border-secondary fw-semibold small">SynapseRT Info</div>
-  <div class="card-body py-2">
-    <div class="d-flex justify-content-between small mb-1"><span class="text-muted">Cycle ID</span><span class="badge bg-dark border border-warning text-warning"><?= e($cycle['synapse_cycle_id']) ?></span></div>
-    <div class="d-flex justify-content-between small"><span class="text-muted">Plan Key</span><span class="text-muted"><?= e($cycle['synapse_plan_key']??'') ?></span></div>
-  </div>
-</div>
+<!-- ── PIE CHART JS ───────────────────────────────────────────────── -->
+<?php if ($total > 0): ?>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const ctx = document.getElementById('testPieChart');
+  if (!ctx) return;
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Bestanden', 'Fehlgeschlagen', 'Ausstehend', 'Übersprungen', 'Blockiert'],
+      datasets: [{
+        data: [<?= $passed ?>, <?= $failed ?>, <?= $pending ?>, <?= $skipped ?>, <?= $blocked ?>],
+        backgroundColor: ['#10b981','#ef4444','#f59e0b','#3b82f6','#6b7280'],
+        borderWidth: 2,
+        borderColor: '#1e293b',
+      }]
+    },
+    options: {
+      responsive: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ctx.label + ': ' + ctx.raw +
+              ' (' + Math.round(ctx.raw / <?= $total ?> * 100) + '%)'
+          }
+        }
+      }
+    }
+  });
+});
+</script>
 <?php endif; ?>

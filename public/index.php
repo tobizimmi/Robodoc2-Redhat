@@ -441,7 +441,8 @@ $router->get('/reports/templates/{id}/schedules',        [ReportController::clas
 $router->post('/reports/templates/{id}/schedules',       [ReportController::class, 'saveSchedule']);
 $router->post('/reports/schedules/{id}/delete',           [ReportController::class, 'deleteSchedule']);
 $router->any('/reports',             [ReportController::class, 'index']);
-$router->get('/api/reports/firmware',[ReportController::class, 'firmwareComparison']);
+$router->get('/api/test-cycles',  [TestCycleController::class, 'apiList']);
+        $router->get('/api/reports/firmware',[ReportController::class, 'firmwareComparison']);
 
 // -- Live-Sync (push newly created entries to another RoboDoc2 instance) ---
 $router->post('/api/sync/entry',                [LiveSyncController::class, 'receiveEntry']);

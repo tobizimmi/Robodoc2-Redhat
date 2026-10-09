@@ -72,16 +72,85 @@ class TestCycleController
     {
         Auth::requireView('testing');
         $cycle = Database::fetchOne(
-            'SELECT tc.*, tp.name plan_name, tp.id plan_id, tp.xray_key plan_xray_key FROM test_cycles tc LEFT JOIN test_plans tp ON tp.id=tc.test_plan_id WHERE tc.id=?',
+            'SELECT tc.*, tp.name plan_name, tp.id plan_id, tp.xray_key plan_xray_key
+             FROM test_cycles tc
+             LEFT JOIN test_plans tp ON tp.id = tc.test_plan_id
+             WHERE tc.id=?',
             [(int)$id]
         );
         if (!$cycle) abort(404, 'Test Cycle nicht gefunden');
+
+        // Runs with full result stats
         $runs = Database::fetchAll(
-            "SELECT tr.*, COUNT(trr.id) result_count, SUM(trr.status='passed') passed, SUM(trr.status='failed') failed, SUM(trr.status='pending') pending FROM test_runs tr LEFT JOIN test_run_results trr ON trr.test_run_id=tr.id WHERE tr.test_cycle_id=? GROUP BY tr.id ORDER BY tr.created_at DESC",
+            "SELECT tr.*,
+                    COUNT(trr.id)                        result_count,
+                    SUM(trr.status='passed')             passed,
+                    SUM(trr.status='failed')             failed,
+                    SUM(trr.status='pending')            pending,
+                    SUM(trr.status='skipped')            skipped,
+                    SUM(trr.status='blocked')            blocked,
+                    u.name                               tester_name
+             FROM test_runs tr
+             LEFT JOIN test_run_results trr ON trr.test_run_id = tr.id
+             LEFT JOIN users u ON u.id = tr.executed_by
+             WHERE tr.test_cycle_id = ?
+             GROUP BY tr.id
+             ORDER BY tr.created_at DESC",
             [(int)$id]
         );
-        $plan = Database::fetchOne('SELECT * FROM test_plans tp LEFT JOIN projects p ON p.id=tp.project_id WHERE tp.id=?', [$cycle['plan_id']]);
-        View::render('test-cycles/show', compact('cycle', 'runs', 'plan') + ['title' => $cycle['name']]);
+
+        // Aggregate stats for pie chart
+        $stats = Database::fetchOne(
+            "SELECT
+                SUM(trr.status='passed')  AS passed,
+                SUM(trr.status='failed')  AS failed,
+                SUM(trr.status='pending') AS pending,
+                SUM(trr.status='skipped') AS skipped,
+                SUM(trr.status='blocked') AS blocked,
+                COUNT(trr.id)             AS total
+             FROM test_runs tr
+             LEFT JOIN test_run_results trr ON trr.test_run_id = tr.id
+             WHERE tr.test_cycle_id = ?",
+            [(int)$id]
+        );
+
+        // Failed results with notes and linked entries
+        $failedResults = Database::fetchAll(
+            "SELECT trr.*, tpi.name test_name, tpi.description test_desc,
+                    u.name tester_name,
+                    GROUP_CONCAT(DISTINCT e.id ORDER BY e.id SEPARATOR ',') entry_ids,
+                    GROUP_CONCAT(DISTINCT e.title ORDER BY e.id SEPARATOR '||') entry_titles
+             FROM test_run_results trr
+             JOIN test_runs tr ON tr.id = trr.test_run_id
+             LEFT JOIN test_plan_items tpi ON tpi.id = trr.test_plan_item_id
+             LEFT JOIN users u ON u.id = trr.executed_by
+             LEFT JOIN test_plan_item_entries tpie ON tpie.test_plan_item_id = trr.test_plan_item_id
+             LEFT JOIN entries e ON e.id = tpie.entry_id
+             WHERE tr.test_cycle_id = ? AND trr.status = 'failed'
+             GROUP BY trr.id
+             ORDER BY trr.executed_at DESC",
+            [(int)$id]
+        );
+
+        // Pending (open) test cases
+        $pendingResults = Database::fetchAll(
+            "SELECT trr.*, tpi.name test_name, tpi.description test_desc
+             FROM test_run_results trr
+             JOIN test_runs tr ON tr.id = trr.test_run_id
+             LEFT JOIN test_plan_items tpi ON tpi.id = trr.test_plan_item_id
+             WHERE tr.test_cycle_id = ? AND trr.status = 'pending'
+             ORDER BY tpi.name",
+            [(int)$id]
+        );
+
+        $plan = Database::fetchOne(
+            'SELECT * FROM test_plans tp LEFT JOIN projects p ON p.id=tp.project_id WHERE tp.id=?',
+            [$cycle['plan_id']]
+        );
+
+        View::render('test-cycles/show',
+            compact('cycle','runs','plan','stats','failedResults','pendingResults')
+            + ['title' => $cycle['name']]);
     }
 
     public static function editCycle(string $id): void
@@ -121,6 +190,20 @@ class TestCycleController
         if (!in_array($status, $allowed)) { http_response_code(422); echo json_encode(['error' => 'Invalid status']); exit; }
         Database::execute('UPDATE test_cycles SET status=? WHERE id=?', [$status, (int)$id]);
         echo json_encode(['success' => true, 'status' => $status]);
+        exit;
+    }
+
+    public static function apiList(): void
+    {
+        Auth::require();
+        header('Content-Type: application/json');
+        $planId = (int)($_GET['plan_id'] ?? 0);
+        if (!$planId) { echo json_encode([]); exit; }
+        $cycles = Database::fetchAll(
+            'SELECT id, name, status FROM test_cycles WHERE test_plan_id=? ORDER BY created_at DESC',
+            [$planId]
+        );
+        echo json_encode($cycles);
         exit;
     }
 }

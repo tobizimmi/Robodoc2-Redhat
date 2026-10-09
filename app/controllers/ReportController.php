@@ -205,6 +205,79 @@ class ReportController
     // ── Shared: fetch entries + all block-level aggregates for a given filter
     // set. Used by every report-rendering entry point below so the query set
     // (and the "compare"/"trend" block data) never drifts between them.
+    private static function fetchTestCycleData(int $cycleId): array
+    {
+        $cycle = Database::fetchOne(
+            'SELECT tc.*, tp.name plan_name, p.name project_name
+             FROM test_cycles tc
+             LEFT JOIN test_plans tp ON tp.id = tc.test_plan_id
+             LEFT JOIN projects p ON p.id = tp.project_id
+             WHERE tc.id=?', [$cycleId]
+        );
+        if (!$cycle) return [];
+
+        $stats = Database::fetchOne(
+            "SELECT SUM(trr.status='passed') passed, SUM(trr.status='failed') failed,
+                    SUM(trr.status='pending') pending, SUM(trr.status='skipped') skipped,
+                    SUM(trr.status='blocked') blocked, COUNT(trr.id) total
+             FROM test_runs tr
+             LEFT JOIN test_run_results trr ON trr.test_run_id = tr.id
+             WHERE tr.test_cycle_id = ?", [$cycleId]
+        );
+
+        $runs = Database::fetchAll(
+            "SELECT tr.*, u.name tester_name,
+                    COUNT(trr.id) result_count,
+                    SUM(trr.status='passed') passed, SUM(trr.status='failed') failed,
+                    SUM(trr.status='pending') pending
+             FROM test_runs tr
+             LEFT JOIN test_run_results trr ON trr.test_run_id = tr.id
+             LEFT JOIN users u ON u.id = tr.executed_by
+             WHERE tr.test_cycle_id = ?
+             GROUP BY tr.id ORDER BY tr.created_at DESC", [$cycleId]
+        );
+
+        $failed = Database::fetchAll(
+            "SELECT trr.*, tpi.name test_name, tpi.description test_desc,
+                    u.name tester_name,
+                    GROUP_CONCAT(DISTINCT e.id ORDER BY e.id SEPARATOR ',') entry_ids,
+                    GROUP_CONCAT(DISTINCT e.title ORDER BY e.id SEPARATOR '||') entry_titles
+             FROM test_run_results trr
+             JOIN test_runs tr ON tr.id = trr.test_run_id
+             LEFT JOIN test_plan_items tpi ON tpi.id = trr.test_plan_item_id
+             LEFT JOIN users u ON u.id = trr.executed_by
+             LEFT JOIN test_plan_item_entries tpie ON tpie.test_plan_item_id = trr.test_plan_item_id
+             LEFT JOIN entries e ON e.id = tpie.entry_id
+             WHERE tr.test_cycle_id = ? AND trr.status = 'failed'
+             GROUP BY trr.id ORDER BY trr.executed_at DESC", [$cycleId]
+        );
+
+        $pending = Database::fetchAll(
+            "SELECT trr.*, tpi.name test_name, tpi.description test_desc
+             FROM test_run_results trr
+             JOIN test_runs tr ON tr.id = trr.test_run_id
+             LEFT JOIN test_plan_items tpi ON tpi.id = trr.test_plan_item_id
+             WHERE tr.test_cycle_id = ? AND trr.status = 'pending'
+             ORDER BY tpi.name", [$cycleId]
+        );
+
+        $linkedEntries = Database::fetchAll(
+            "SELECT DISTINCT e.id, e.title, e.status, e.priority, p.name project_name,
+                    GROUP_CONCAT(DISTINCT tpi.name ORDER BY tpi.name SEPARATOR ', ') test_names,
+                    GROUP_CONCAT(DISTINCT trr.status ORDER BY trr.status SEPARATOR ', ') test_statuses
+             FROM entries e
+             LEFT JOIN projects p ON p.id = e.project_id
+             JOIN test_plan_item_entries tpie ON tpie.entry_id = e.id
+             JOIN test_plan_items tpi ON tpi.id = tpie.test_plan_item_id
+             JOIN test_run_results trr ON trr.test_plan_item_id = tpi.id
+             JOIN test_runs tr ON tr.id = trr.test_run_id
+             WHERE tr.test_cycle_id = ?
+             GROUP BY e.id ORDER BY e.title", [$cycleId]
+        );
+
+        return compact('cycle', 'stats', 'runs', 'failed', 'pending', 'linkedEntries');
+    }
+
     private static function fetchReportData(int $projectId, string $dateFrom, string $dateTo, array $typeIds): array
     {
         $where = ['e.is_merged=0']; $params = [];
@@ -274,7 +347,18 @@ class ReportController
             $prev = ['from' => $prevFrom->format('Y-m-d'), 'to' => $prevTo->format('Y-m-d'), 'total' => $prevTotal, 'open' => $prevOpen];
         }
 
-        return compact('entries', 'project', 'byType', 'byStatus', 'byPriority', 'byFirmware', 'trend', 'prev');
+        // Load test cycle data if test_plan_id provided
+        $testPlanId = (int)($_REQUEST['test_plan_id'] ?? 0);
+        $testCycleId = (int)($_REQUEST['test_cycle_id'] ?? 0);
+        $testData = [];
+        if ($testCycleId) {
+            $testData = self::fetchTestCycleData($testCycleId);
+        } elseif ($testPlanId) {
+            // Get most recent cycle
+            $latestCycle = Database::fetchOne('SELECT id FROM test_cycles WHERE test_plan_id=? ORDER BY created_at DESC LIMIT 1', [$testPlanId]);
+            if ($latestCycle) $testData = self::fetchTestCycleData((int)$latestCycle['id']);
+        }
+        return compact('entries', 'project', 'byType', 'byStatus', 'byPriority', 'byFirmware', 'trend', 'prev', 'testData');
     }
 
     // ── Generate report from template ─────────────────────────────────────────
@@ -308,9 +392,12 @@ class ReportController
         $dateTo    = trim($_REQUEST['date_to']    ?? $config['preview']['date_to']    ?? '');
         $typeIds   = array_map('intval', $_REQUEST['type_ids'] ?? $config['preview']['type_ids'] ?? []);
 
+        $testPlanId = (int)($_REQUEST['test_plan_id'] ?? $config['preview']['test_plan_id'] ?? 0);
+        $_REQUEST['test_plan_id'] = $testPlanId;
         $data = self::fetchReportData($projectId, $dateFrom, $dateTo, $typeIds);
 
         // Pass runtime filter info to template for display
+        $_REQUEST['test_cycle_id'] = (int)($_REQUEST['test_cycle_id'] ?? $config['preview']['test_cycle_id'] ?? 0);
         $config['_runtime'] = [
             'project_id' => $projectId,
             'date_from'  => $dateFrom,
