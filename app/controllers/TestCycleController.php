@@ -80,15 +80,15 @@ class TestCycleController
         );
         if (!$cycle) abort(404, 'Test Cycle nicht gefunden');
 
-        // Runs with full result stats
+        // Runs with result stats (no executed_by on test_runs)
         $runs = Database::fetchAll(
             "SELECT tr.*,
-                    COUNT(trr.id)                        result_count,
-                    SUM(trr.status='passed')             passed,
-                    SUM(trr.status='failed')             failed,
-                    SUM(trr.status='pending')            pending,
-                    SUM(trr.status='skipped')            skipped,
-                    SUM(trr.status='blocked')            blocked,
+                    COUNT(trr.id)             result_count,
+                    SUM(trr.status='passed')  passed,
+                    SUM(trr.status='failed')  failed,
+                    SUM(trr.status='pending') pending,
+                    SUM(trr.status='skipped') skipped,
+                    SUM(trr.status='blocked') blocked
              FROM test_runs tr
              LEFT JOIN test_run_results trr ON trr.test_run_id = tr.id
              WHERE tr.test_cycle_id = ?
@@ -100,12 +100,12 @@ class TestCycleController
         // Aggregate stats for pie chart
         $stats = Database::fetchOne(
             "SELECT
-                SUM(trr.status='passed')  AS passed,
-                SUM(trr.status='failed')  AS failed,
-                SUM(trr.status='pending') AS pending,
-                SUM(trr.status='skipped') AS skipped,
-                SUM(trr.status='blocked') AS blocked,
-                COUNT(trr.id)             AS total
+                SUM(trr.status='passed')  passed,
+                SUM(trr.status='failed')  failed,
+                SUM(trr.status='pending') pending,
+                SUM(trr.status='skipped') skipped,
+                SUM(trr.status='blocked') blocked,
+                COUNT(trr.id)             total
              FROM test_runs tr
              LEFT JOIN test_run_results trr ON trr.test_run_id = tr.id
              WHERE tr.test_cycle_id = ?",
@@ -115,7 +115,8 @@ class TestCycleController
         // Failed results with notes and linked entries
         $failedResults = Database::fetchAll(
             "SELECT trr.*, tpi.name test_name, tpi.description test_desc,
-                    GROUP_CONCAT(DISTINCT e.id ORDER BY e.id SEPARATOR ',') entry_ids,
+                    u.name tester_name,
+                    GROUP_CONCAT(DISTINCT e.id ORDER BY e.id SEPARATOR ',')     entry_ids,
                     GROUP_CONCAT(DISTINCT e.title ORDER BY e.id SEPARATOR '||') entry_titles
              FROM test_run_results trr
              JOIN test_runs tr ON tr.id = trr.test_run_id
@@ -129,7 +130,7 @@ class TestCycleController
             [(int)$id]
         );
 
-        // Pending (open) test cases
+        // Pending test cases
         $pendingResults = Database::fetchAll(
             "SELECT trr.*, tpi.name test_name, tpi.description test_desc
              FROM test_run_results trr
@@ -146,7 +147,7 @@ class TestCycleController
         );
 
         View::render('test-cycles/show',
-            compact('cycle','runs','plan','stats','failedResults','pendingResults')
+            compact('cycle', 'runs', 'plan', 'stats', 'failedResults', 'pendingResults')
             + ['title' => $cycle['name']]);
     }
 
