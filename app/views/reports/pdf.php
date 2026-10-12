@@ -508,6 +508,101 @@ $tCycles  = $td['cycles'] ?? [];
   </table>
 </div>
 <?php else: ?><div class="section" style="background:#f9fafb;padding:8px;border-radius:4px;font-size:9px;color:#6b7280">Keine verknüpften Einträge.</div><?php endif; ?>
+
+<?php elseif ($btype === 'test_cycle_bugs'): ?>
+<?php $td5 = $data['testData'] ?? []; $tcBugs = $td5['bugs'] ?? []; $tcJiraBase = rtrim(appSetting('jira_url') ?: '', '/'); ?>
+<?php if ($tcBugs): ?>
+<div class="section no-break">
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Verknüpfte Bugs ('.count($tcBugs).')') ?></div>
+  <table style="width:100%;border-collapse:collapse;font-size:8px">
+    <thead><tr style="background:#f3f4f6">
+      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb">Bug</th>
+      <th style="padding:3px 6px;border:1px solid #e5e7eb">Status</th>
+      <th style="padding:3px 6px;border:1px solid #e5e7eb">Prio</th>
+      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb">Test Case</th>
+      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb">Test Run</th>
+      <th style="padding:3px 6px;border:1px solid #e5e7eb">Erstellt</th>
+    </tr></thead>
+    <tbody>
+      <?php foreach ($tcBugs as $bug): ?>
+      <tr>
+        <td style="padding:3px 6px;border:1px solid #e5e7eb;font-weight:600">
+          <?php if ($bug['entry_id']): ?>#<?= $bug['entry_id'] ?> <?= htmlspecialchars(substr($bug['entry_title']??'',0,35)) ?>
+          <?php elseif ($bug['jira_key'] && $tcJiraBase): ?><a href="<?= htmlspecialchars($tcJiraBase . '/browse/' . $bug['jira_key']) ?>" style="color:#1d4ed8"><?= htmlspecialchars($bug['jira_key']) ?></a>
+          <?php elseif ($bug['jira_key']): ?><?= htmlspecialchars($bug['jira_key']) ?>
+          <?php else: ?>—<?php endif; ?>
+        </td>
+        <td style="padding:3px 6px;border:1px solid #e5e7eb"><span style="background:#e5e7eb;border-radius:2px;padding:1px 4px;font-size:7px"><?= htmlspecialchars($bug['entry_status']??'—') ?></span></td>
+        <td style="padding:3px 6px;border:1px solid #e5e7eb;color:#6b7280;font-size:7px"><?= htmlspecialchars($bug['entry_priority']??'—') ?></td>
+        <td style="padding:3px 6px;border:1px solid #e5e7eb;color:#6b7280;font-size:7px"><?= htmlspecialchars(substr($bug['test_name']??'',0,30)) ?></td>
+        <td style="padding:3px 6px;border:1px solid #e5e7eb;color:#6b7280;font-size:7px"><?= htmlspecialchars($bug['run_name']??'') ?></td>
+        <td style="padding:3px 6px;border:1px solid #e5e7eb;color:#9ca3af;font-size:7px"><?= $bug['created_at'] ? substr($bug['created_at'],0,10) : '' ?></td>
+      </tr>
+      <?php endforeach; ?>
+    </tbody>
+  </table>
+</div>
+<?php else: ?><div class="section" style="background:#f0fdf4;padding:8px;border-radius:4px;font-size:9px;color:#15803d">✓ Keine Bugs verknüpft.</div><?php endif; ?>
+
+<?php elseif ($btype === 'test_overview'): ?>
+<?php
+$tov        = $data['testOverview'] ?? [];
+$tovCats    = $tov['categories'] ?? [];
+$tovItems   = $tov['items'] ?? [];
+$tovFilter  = (string)($bcfg['category_id'] ?? '');
+if ($tovFilter !== '') {
+    $tovItems = array_values(array_filter($tovItems, fn($i) => (string)($i['category_id'] ?? '') === $tovFilter));
+}
+$tovGrouped = [];
+foreach ($tovCats as $cat) {
+    if ($tovFilter === '' || (string)$cat['id'] === $tovFilter) $tovGrouped[$cat['id']] = ['cat' => $cat, 'items' => []];
+}
+$tovUncat = [];
+foreach ($tovItems as $it) {
+    $cid = $it['category_id'] ?? null;
+    if ($cid && isset($tovGrouped[$cid])) { $tovGrouped[$cid]['items'][] = $it; }
+    elseif ($tovFilter === '') { $tovUncat[] = $it; }
+}
+if ($tovUncat) $tovGrouped['none'] = ['cat' => ['id' => 'none', 'name' => 'Ohne Kategorie'], 'items' => $tovUncat];
+$tovStatusLabels = ['new'=>'Neu','pending'=>'Pending','passed'=>'Passed','failed'=>'Failed','skipped'=>'Skipped','blocked'=>'Blocked'];
+$tovStatusBg     = ['new'=>'#e0e7ff','pending'=>'#e5e7eb','passed'=>'#d1fae5','failed'=>'#fee2e2','skipped'=>'#e5e7eb','blocked'=>'#fef3c7'];
+?>
+<?php if ($tovItems): ?>
+<div class="section no-break">
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Test Übersicht') ?></div>
+  <?php foreach ($tovGrouped as $tg): if (!$tg['items']) continue; ?>
+  <div style="font-size:9px;font-weight:700;color:#374151;margin:6px 0 3px"><?= htmlspecialchars($tg['cat']['name']) ?> (<?= count($tg['items']) ?>)</div>
+  <table style="width:100%;border-collapse:collapse;font-size:8px;margin-bottom:6px">
+    <thead><tr style="background:#f3f4f6">
+      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb">Test Case</th>
+      <th style="padding:3px 6px;border:1px solid #e5e7eb">Prio</th>
+      <th style="padding:3px 6px;border:1px solid #e5e7eb">Letzter Status</th>
+      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb">Verlauf</th>
+      <th style="padding:3px 6px;border:1px solid #e5e7eb">Zuletzt ausgeführt</th>
+    </tr></thead>
+    <tbody>
+      <?php foreach ($tg['items'] as $it): $ls = $it['latest_status'] ?? 'new'; ?>
+      <tr>
+        <td style="padding:3px 6px;border:1px solid #e5e7eb;font-weight:600"><?= htmlspecialchars(substr($it['title']??'',0,40)) ?></td>
+        <td style="padding:3px 6px;border:1px solid #e5e7eb;color:#6b7280;font-size:7px"><?= htmlspecialchars($it['priority']??'—') ?></td>
+        <td style="padding:3px 6px;border:1px solid #e5e7eb"><span style="background:<?= $tovStatusBg[$ls] ?? '#e5e7eb' ?>;border-radius:2px;padding:1px 4px;font-size:7px"><?= htmlspecialchars($tovStatusLabels[$ls] ?? $ls) ?></span></td>
+        <td style="padding:3px 6px;border:1px solid #e5e7eb;color:#6b7280;font-size:7px">
+          <?php
+          $hist = [];
+          foreach (['passed'=>'c_passed','failed'=>'c_failed','pending'=>'c_pending','new'=>'c_new','skipped'=>'c_skipped','blocked'=>'c_blocked'] as $st => $col) {
+              if ((int)($it[$col] ?? 0) > 0) $hist[] = (int)$it[$col] . '×' . $tovStatusLabels[$st];
+          }
+          echo $hist ? htmlspecialchars(implode(' ', $hist)) : '—';
+          ?>
+        </td>
+        <td style="padding:3px 6px;border:1px solid #e5e7eb;color:#9ca3af;font-size:7px"><?= $it['last_executed_at'] ? substr($it['last_executed_at'],0,10) : '—' ?></td>
+      </tr>
+      <?php endforeach; ?>
+    </tbody>
+  </table>
+  <?php endforeach; ?>
+</div>
+<?php else: ?><div class="section" style="background:#f9fafb;padding:8px;border-radius:4px;font-size:9px;color:#6b7280">Keine Test Cases<?= $tovFilter !== '' ? ' in dieser Kategorie' : '' ?>.</div><?php endif; ?>
 <?php endif; ?>
 
 <?php if ($btype === 'page_break'): ?>

@@ -167,7 +167,12 @@ class ReportController
         $projects   = Database::fetchAll("SELECT id, name, color FROM projects WHERE status='active' ORDER BY name");
         $entryTypes = Database::fetchAll('SELECT id, name, color FROM entry_types ORDER BY sort_order, name');
         $tags       = Database::fetchAll('SELECT id, name FROM tags ORDER BY name');
-        View::render('reports/builder', compact('templates', 'projects', 'entryTypes', 'tags'), 'app');
+        $categories = Database::fetchAll(
+            'SELECT tc.id, tc.name, tc.project_id, p.name project_name
+             FROM test_categories tc LEFT JOIN projects p ON p.id = tc.project_id
+             ORDER BY p.name, tc.sort_order, tc.name'
+        );
+        View::render('reports/builder', compact('templates', 'projects', 'entryTypes', 'tags', 'categories'), 'app');
     }
 
     // ── Save template ─────────────────────────────────────────────────────────
@@ -283,7 +288,22 @@ class ReportController
              GROUP BY e.id ORDER BY e.title", $cycleIds
         );
 
-        return compact('cycles', 'stats', 'runs', 'failed', 'pending', 'linkedEntries');
+        // Bugs created/linked from a test result (Test Run "Bug verknüpfen" /
+        // "Neuen Bug erstellen") - distinct from $linkedEntries above, which
+        // covers the older, separate test_plan_item_entries linkage.
+        $bugs = Database::fetchAll(
+            "SELECT trb.*, tpi.title test_name, tr.name run_name,
+                    e.title entry_title, e.status entry_status, e.priority entry_priority
+             FROM test_run_bugs trb
+             JOIN test_run_results trr ON trr.id = trb.test_run_result_id
+             JOIN test_runs tr ON tr.id = trr.test_run_id
+             JOIN test_plan_items tpi ON tpi.id = trr.test_plan_item_id
+             LEFT JOIN entries e ON e.id = trb.entry_id
+             WHERE tr.test_cycle_id IN ($ph)
+             ORDER BY trb.created_at DESC", $cycleIds
+        );
+
+        return compact('cycles', 'stats', 'runs', 'failed', 'pending', 'linkedEntries', 'bugs');
     }
 
     private static function fetchReportData(int $projectId, string $dateFrom, string $dateTo, array $typeIds): array
@@ -368,7 +388,17 @@ class ReportController
             $latestCycle = Database::fetchOne('SELECT id FROM test_cycles WHERE test_plan_id=? ORDER BY created_at DESC LIMIT 1', [$testPlanId]);
             if ($latestCycle) $testData = self::fetchTestCycleData([(int)$latestCycle['id']]);
         }
-        return compact('entries', 'project', 'byType', 'byStatus', 'byPriority', 'byFirmware', 'trend', 'prev', 'testData');
+
+        // Test Übersicht block: the whole project's test cases grouped by
+        // category with their full run history - independent of which cycle(s)
+        // were picked above, since the overview's whole point is cross-cycle.
+        $testOverview = [];
+        if ($projectId) {
+            [$ovCategories, $ovItems, $ovDetailsByItem] = TestOverviewController::fetchOverviewData($projectId);
+            $testOverview = ['categories' => $ovCategories, 'items' => $ovItems, 'detailsByItem' => $ovDetailsByItem];
+        }
+
+        return compact('entries', 'project', 'byType', 'byStatus', 'byPriority', 'byFirmware', 'trend', 'prev', 'testData', 'testOverview');
     }
 
     // ── Generate report from template ─────────────────────────────────────────

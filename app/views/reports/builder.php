@@ -430,6 +430,7 @@ var RD_STATUSES    = <?= json_encode(entryStatuses()) ?>;
 var RD_PRIORITIES  = ['Blocker','Highest','High','Medium','Low'];
 var RD_ENTRY_TYPES = <?= json_encode(array_values(array_column($entryTypes, 'name'))) ?>;
 var RD_TAGS         = <?= json_encode(array_values(array_column($tags, 'name'))) ?>;
+var RD_CATEGORIES  = <?= json_encode(array_map(fn($c) => ['id' => $c['id'], 'label' => $c['project_name'] . ': ' . $c['name']], $categories)) ?>;
 // Block types whose content is built from the entry list, so a per-block
 // filter (status/priority/type) makes sense on them — project_header/text/
 // divider/page_break don't consume entries directly.
@@ -462,6 +463,8 @@ var RD_DEFS = {
   test_cycle_results: {l:'Test: Fehlgeschlagene',    i:'bi-x-circle-fill',    c:'#ef4444', d:'Fehlgeschlagene Tests mit Notizen und verlinkten Einträgen'},
   test_cycle_open:    {l:'Test: Offene Tests',       i:'bi-clock-fill',       c:'#f59e0b', d:'Noch nicht ausgeführte Test Cases'},
   test_cycle_entries: {l:'Test: Verknüpfte Einträge',i:'bi-link-45deg',       c:'#6366f1', d:'Einträge die mit Test Cases verknüpft sind'},
+  test_cycle_bugs:    {l:'Test: Verknüpfte Bugs',    i:'bi-bug-fill',         c:'#dc2626', d:'Im Test Run verknüpfte/erstellte Bugs'},
+  test_overview:      {l:'Test Übersicht',           i:'bi-table',            c:'#8b5cf6', d:'Alle Test Cases nach Kategorie, mit Status-Verlauf - unabhängig vom gewählten Cycle'},
 };
 
 function rdLoadCycles(planId) {
@@ -811,6 +814,13 @@ function rdRenderCanvas(){
         body+='<div class="form-check"><input class="form-check-input rdGroupByProject" type="checkbox" data-bid="'+b.id+'"'+(b.cfg.groupByProject?' checked':'')+'>'
           +'<label class="form-check-label" style="font-size:11px;color:#d1d5db">Ein Mini-Chart pro Projekt statt einem Gesamt-Chart</label></div>';
       }
+      if(b.type==='test_overview'){
+        body+='<div class="d-flex align-items-center gap-2 mb-2"><label style="font-size:11px;color:#9ca3af">Nur Kategorie:</label>'
+          +'<select class="form-select form-select-sm rdOverviewCat" data-bid="'+b.id+'" style="background:#1a1d23;color:#e5e7eb;border-color:#374151">'
+          +'<option value=""'+(!b.cfg.category_id?' selected':'')+'>Alle Kategorien</option>'
+          +RD_CATEGORIES.map(function(c){return '<option value="'+c.id+'"'+(String(b.cfg.category_id||'')===String(c.id)?' selected':'')+'>'+rdEsc(c.label)+'</option>';}).join('')
+          +'</select></div>';
+      }
       body+='</div>';
     }
     // Per-block filter: narrows just this block's entries (e.g. a priority chart
@@ -894,6 +904,13 @@ function rdRenderCanvas(){
     sel.addEventListener('change',function(){
       var b=_rdBlocks.find(function(x){return x.id===+sel.dataset.bid;});
       if(b){b.cfg.orientation=sel.value;}
+    });
+  });
+  cv.querySelectorAll('.rdOverviewCat').forEach(function(sel){
+    sel.addEventListener('change',function(){
+      var b=_rdBlocks.find(function(x){return x.id===+sel.dataset.bid;});
+      if(b){b.cfg.category_id=sel.value||null;}
+      rdUpdatePreview();
     });
   });
   cv.querySelectorAll('.rdLim').forEach(function(inp){inp.addEventListener('change',function(){var b=_rdBlocks.find(function(x){return x.id===+inp.dataset.bid;});if(b){b.cfg.limit=+inp.value;}rdUpdatePreview();});});

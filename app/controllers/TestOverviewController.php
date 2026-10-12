@@ -66,7 +66,8 @@ class TestOverviewController
 
     // Shared by index() (page render) and exportCsv() (Excel-compatible CSV),
     // so the two can never drift apart on what "the overview" contains.
-    private static function fetchOverviewData(int $projectId): array
+    // Public: also reused by ReportController for the "Test Übersicht" report block.
+    public static function fetchOverviewData(int $projectId): array
     {
         $categories = Database::fetchAll(
             'SELECT * FROM test_categories WHERE project_id=? ORDER BY sort_order, name',
