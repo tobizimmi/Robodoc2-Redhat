@@ -367,16 +367,20 @@ $tSkipped = (int)($ts2['skipped'] ?? 0);
 $tBlocked = (int)($ts2['blocked'] ?? 0);
 $tTotal   = (int)($ts2['total']   ?? 0);
 $tPct     = $tTotal > 0 ? round($tPassed/$tTotal*100) : 0;
-$tCycle   = $td['cycle'] ?? [];
+$tCycles  = $td['cycles'] ?? [];
 ?>
 <?php if ($tTotal > 0): ?>
 <div class="section no-break">
   <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Test-Status Übersicht') ?></div>
-  <?php if (!empty($tCycle['name'])): ?>
+  <?php if ($tCycles): ?>
   <div style="font-size:9px;color:#6b7280;margin-bottom:8px">
-    Cycle: <strong><?= htmlspecialchars($tCycle['name']) ?></strong>
-    <?php if (!empty($tCycle['plan_name'])): ?> · Plan: <?= htmlspecialchars($tCycle['plan_name']) ?><?php endif; ?>
-    <?php if (!empty($tCycle['environment'])): ?> · Umgebung: <?= htmlspecialchars($tCycle['environment']) ?><?php endif; ?>
+    <?php if (count($tCycles) === 1): ?>
+    Cycle: <strong><?= htmlspecialchars($tCycles[0]['name']) ?></strong>
+    <?php if (!empty($tCycles[0]['plan_name'])): ?> · Plan: <?= htmlspecialchars($tCycles[0]['plan_name']) ?><?php endif; ?>
+    <?php if (!empty($tCycles[0]['environment'])): ?> · Umgebung: <?= htmlspecialchars($tCycles[0]['environment']) ?><?php endif; ?>
+    <?php else: ?>
+    Cycles (kombiniert): <strong><?= htmlspecialchars(implode(', ', array_column($tCycles, 'name'))) ?></strong>
+    <?php endif; ?>
   </div>
   <?php endif; ?>
   <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">

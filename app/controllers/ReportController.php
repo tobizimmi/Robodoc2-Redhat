@@ -205,16 +205,24 @@ class ReportController
     // ── Shared: fetch entries + all block-level aggregates for a given filter
     // set. Used by every report-rendering entry point below so the query set
     // (and the "compare"/"trend" block data) never drifts between them.
-    private static function fetchTestCycleData(int $cycleId): array
+    // $cycleIds: one or more test_cycles.id - multiple cycles are combined into
+    // one aggregated result (e.g. "Regression Run 1" + "Regression Run 2"),
+    // not shown as separate per-cycle sections.
+    private static function fetchTestCycleData(array $cycleIds): array
     {
-        $cycle = Database::fetchOne(
-            'SELECT tc.*, tp.name plan_name, p.name project_name
+        $cycleIds = array_values(array_unique(array_filter(array_map('intval', $cycleIds))));
+        if (!$cycleIds) return [];
+        $ph = implode(',', array_fill(0, count($cycleIds), '?'));
+
+        $cycles = Database::fetchAll(
+            "SELECT tc.*, tp.name plan_name, p.name project_name
              FROM test_cycles tc
              LEFT JOIN test_plans tp ON tp.id = tc.test_plan_id
              LEFT JOIN projects p ON p.id = tp.project_id
-             WHERE tc.id=?', [$cycleId]
+             WHERE tc.id IN ($ph)
+             ORDER BY tc.created_at", $cycleIds
         );
-        if (!$cycle) return [];
+        if (!$cycles) return [];
 
         $stats = Database::fetchOne(
             "SELECT SUM(trr.status='passed') passed, SUM(trr.status='failed') failed,
@@ -222,7 +230,7 @@ class ReportController
                     SUM(trr.status='blocked') blocked, COUNT(trr.id) total
              FROM test_runs tr
              LEFT JOIN test_run_results trr ON trr.test_run_id = tr.id
-             WHERE tr.test_cycle_id = ?", [$cycleId]
+             WHERE tr.test_cycle_id IN ($ph)", $cycleIds
         );
 
         $runs = Database::fetchAll(
@@ -232,8 +240,8 @@ class ReportController
                     SUM(trr.status='pending') pending
              FROM test_runs tr
              LEFT JOIN test_run_results trr ON trr.test_run_id = tr.id
-             WHERE tr.test_cycle_id = ?
-             GROUP BY tr.id ORDER BY tr.created_at DESC", [$cycleId]
+             WHERE tr.test_cycle_id IN ($ph)
+             GROUP BY tr.id ORDER BY tr.created_at DESC", $cycleIds
         );
 
         $failed = Database::fetchAll(
@@ -247,8 +255,8 @@ class ReportController
              LEFT JOIN users u ON u.id = trr.executed_by
              LEFT JOIN test_plan_item_entries tpie ON tpie.test_plan_item_id = trr.test_plan_item_id
              LEFT JOIN entries e ON e.id = tpie.entry_id
-             WHERE tr.test_cycle_id = ? AND trr.status = 'failed'
-             GROUP BY trr.id ORDER BY trr.executed_at DESC", [$cycleId]
+             WHERE tr.test_cycle_id IN ($ph) AND trr.status = 'failed'
+             GROUP BY trr.id ORDER BY trr.executed_at DESC", $cycleIds
         );
 
         $pending = Database::fetchAll(
@@ -256,8 +264,8 @@ class ReportController
              FROM test_run_results trr
              JOIN test_runs tr ON tr.id = trr.test_run_id
              LEFT JOIN test_plan_items tpi ON tpi.id = trr.test_plan_item_id
-             WHERE tr.test_cycle_id = ? AND trr.status = 'pending'
-             ORDER BY tpi.title", [$cycleId]
+             WHERE tr.test_cycle_id IN ($ph) AND trr.status = 'pending'
+             ORDER BY tpi.title", $cycleIds
         );
 
         $linkedEntries = Database::fetchAll(
@@ -270,11 +278,11 @@ class ReportController
              JOIN test_plan_items tpi ON tpi.id = tpie.test_plan_item_id
              JOIN test_run_results trr ON trr.test_plan_item_id = tpi.id
              JOIN test_runs tr ON tr.id = trr.test_run_id
-             WHERE tr.test_cycle_id = ?
-             GROUP BY e.id ORDER BY e.title", [$cycleId]
+             WHERE tr.test_cycle_id IN ($ph)
+             GROUP BY e.id ORDER BY e.title", $cycleIds
         );
 
-        return compact('cycle', 'stats', 'runs', 'failed', 'pending', 'linkedEntries');
+        return compact('cycles', 'stats', 'runs', 'failed', 'pending', 'linkedEntries');
     }
 
     private static function fetchReportData(int $projectId, string $dateFrom, string $dateTo, array $typeIds): array
@@ -346,16 +354,18 @@ class ReportController
             $prev = ['from' => $prevFrom->format('Y-m-d'), 'to' => $prevTo->format('Y-m-d'), 'total' => $prevTotal, 'open' => $prevOpen];
         }
 
-        // Load test cycle data if test_plan_id provided
-        $testPlanId = (int)($_REQUEST['test_plan_id'] ?? 0);
-        $testCycleId = (int)($_REQUEST['test_cycle_id'] ?? 0);
+        // Load test cycle data if test_plan_id provided. test_cycle_id may be a
+        // single value (old links) or an array (multi-select "combine cycles").
+        $testPlanId   = (int)($_REQUEST['test_plan_id'] ?? 0);
+        $testCycleIds = array_map('intval', (array)($_REQUEST['test_cycle_id'] ?? []));
+        $testCycleIds = array_filter($testCycleIds);
         $testData = [];
-        if ($testCycleId) {
-            $testData = self::fetchTestCycleData($testCycleId);
+        if ($testCycleIds) {
+            $testData = self::fetchTestCycleData($testCycleIds);
         } elseif ($testPlanId) {
             // Get most recent cycle
             $latestCycle = Database::fetchOne('SELECT id FROM test_cycles WHERE test_plan_id=? ORDER BY created_at DESC LIMIT 1', [$testPlanId]);
-            if ($latestCycle) $testData = self::fetchTestCycleData((int)$latestCycle['id']);
+            if ($latestCycle) $testData = self::fetchTestCycleData([(int)$latestCycle['id']]);
         }
         return compact('entries', 'project', 'byType', 'byStatus', 'byPriority', 'byFirmware', 'trend', 'prev', 'testData');
     }
@@ -396,7 +406,6 @@ class ReportController
         $data = self::fetchReportData($projectId, $dateFrom, $dateTo, $typeIds);
 
         // Pass runtime filter info to template for display
-        $_REQUEST['test_cycle_id'] = (int)($_REQUEST['test_cycle_id'] ?? $config['preview']['test_cycle_id'] ?? 0);
         $config['_runtime'] = [
             'project_id' => $projectId,
             'date_from'  => $dateFrom,

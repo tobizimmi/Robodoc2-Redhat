@@ -120,7 +120,6 @@ $schedUrl = url('reports/schedules/');
             <div class="col-md-6">
               <label class="form-label"><i class="bi bi-shield-check me-1 text-info"></i>Test Plan (optional)</label>
               <select name="test_plan_id" id="rdGenTestPlan" class="form-select" onchange="rdLoadCycles(this.value)">
-
                 <option value="">Kein Test Plan</option>
                 <?php
                 $testPlans = Database::fetchAll('SELECT tp.id, tp.name, p.name project_name FROM test_plans tp LEFT JOIN projects p ON p.id=tp.project_id ORDER BY p.name, tp.name');
@@ -129,13 +128,12 @@ $schedUrl = url('reports/schedules/');
                 <?php endforeach; ?>
               </select>
             </div>
-            <div class="mb-2">
-              <label class="form-label small">Test Cycle (für Test-Blöcke)</label>
-              <select name="test_cycle_id" id="rdGenTestCycle" class="form-select">
-                <option value="">— Cycle wählen —</option>
+            <div class="col-md-6">
+              <label class="form-label small">Test Cycle(s) <span class="text-muted">(für Test-Blöcke)</span></label>
+              <select name="test_cycle_id[]" id="rdGenTestCycle" class="form-select" multiple size="3">
+                <option value="" disabled>— zuerst Test Plan wählen —</option>
               </select>
-            </div>
-
+              <small class="text-muted">Strg/Cmd gedrückt halten für mehrere - werden kombiniert angezeigt.</small>
             </div>
             <div class="col-md-6">
               <label class="form-label">Datum von</label>
@@ -469,16 +467,18 @@ var RD_DEFS = {
 function rdLoadCycles(planId) {
   var sel = document.getElementById('rdGenTestCycle');
   if (!sel) return;
-  sel.innerHTML = '<option value="">Wird geladen...</option>';
+  if (!planId) { sel.innerHTML = '<option value="" disabled>— zuerst Test Plan wählen —</option>'; return; }
+  sel.innerHTML = '<option value="" disabled>Wird geladen...</option>';
   fetch('<?= url('api/test-cycles') ?>?plan_id='+planId)
     .then(r=>r.json())
     .then(function(cycles){
-      sel.innerHTML = '<option value="">— Cycle wählen —</option>';
+      if (!cycles.length) { sel.innerHTML = '<option value="" disabled>Keine Cycles vorhanden</option>'; return; }
+      sel.innerHTML = '';
       cycles.forEach(function(c){
         sel.innerHTML += '<option value="'+c.id+'">'+rdEsc(c.name)+' ('+rdEsc(c.status)+')</option>';
       });
     })
-    .catch(function(){ sel.innerHTML = '<option value="">Fehler beim Laden</option>'; });
+    .catch(function(){ sel.innerHTML = '<option value="" disabled>Fehler beim Laden</option>'; });
 }
 function rdGv(id){ var e=document.getElementById(id); return e?e.value:''; }
 function rdGc(id){ var e=document.getElementById(id); return e?e.checked:false; }
