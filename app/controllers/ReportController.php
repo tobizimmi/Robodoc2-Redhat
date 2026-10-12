@@ -409,10 +409,14 @@ class ReportController
         if (!$tpl) { abort(404, 'Template not found'); }
         $config = json_decode($tpl['config'], true) ?: [];
 
-        $projectId = (int)($config['filters']['project_id'] ?? 0);
-        $dateFrom  = $config['filters']['date_from'] ?? '';
-        $dateTo    = $config['filters']['date_to'] ?? '';
-        $typeIds   = array_map('intval', $config['filters']['type_ids'] ?? []);
+        // The builder never actually writes a config.filters block (only
+        // config.preview, set from the preview panel's own fields), so
+        // config.filters.project_id was always empty here - falling back to
+        // config.preview mirrors what generateReport() already does.
+        $projectId = (int)($config['filters']['project_id'] ?? $config['preview']['project_id'] ?? 0);
+        $dateFrom  = $config['filters']['date_from'] ?? $config['preview']['date_from'] ?? '';
+        $dateTo    = $config['filters']['date_to']   ?? $config['preview']['date_to']   ?? '';
+        $typeIds   = array_map('intval', $config['filters']['type_ids'] ?? $config['preview']['type_ids'] ?? []);
 
         $data = self::fetchReportData($projectId, $dateFrom, $dateTo, $typeIds);
         View::render('reports/pdf', compact('tpl', 'config', 'data'), 'public');
@@ -456,10 +460,12 @@ class ReportController
         if (!$tpl) { abort(404); }
         $config = json_decode($tpl['config'], true) ?: [];
 
-        $projectId = (int)($config['filters']['project_id'] ?? 0);
-        $dateFrom  = $config['filters']['date_from'] ?? '';
-        $dateTo    = $config['filters']['date_to'] ?? '';
-        $typeIds   = array_map('intval', $config['filters']['type_ids'] ?? []);
+        // Same config.filters/config.preview fallback as generateFromTemplate() -
+        // see the comment there.
+        $projectId = (int)($config['filters']['project_id'] ?? $config['preview']['project_id'] ?? 0);
+        $dateFrom  = $config['filters']['date_from'] ?? $config['preview']['date_from'] ?? '';
+        $dateTo    = $config['filters']['date_to']   ?? $config['preview']['date_to']   ?? '';
+        $typeIds   = array_map('intval', $config['filters']['type_ids'] ?? $config['preview']['type_ids'] ?? []);
 
         $data = self::fetchReportData($projectId, $dateFrom, $dateTo, $typeIds);
         while (ob_get_level()) ob_end_clean();
