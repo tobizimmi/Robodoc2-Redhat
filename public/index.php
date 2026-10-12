@@ -194,13 +194,14 @@ $router->post('/test-plans/{id}/items/{iid}/set-request', [TestPlanController::c
 
 // -- Test Runs --------------------------------------------
 $router->get('/test-overview',       [TestOverviewController::class, 'index']);
+$router->get('/test-overview/export.csv', [TestOverviewController::class, 'exportCsv']);
 $router->get('/test-runs',           [TestRunController::class, 'index']);
 $router->any('/test-runs/create',    [TestRunController::class, 'create']);
 $router->get('/test-runs/{id}',      [TestRunController::class, 'show']);
 $router->any('/test-runs/{id}/edit', [TestRunController::class, 'edit']);
 $router->post('/test-runs/{id}/delete', [TestRunController::class, 'delete']);
-$router->post('/test-runs/{id}/pql',      [TestRunController::class, 'linkPql']);
-$router->post('/test-runs/{id}/pql/sync', [TestRunController::class, 'syncPql']);
+$router->post('/test-runs/{id}/results/{rid}/pql',      [TestRunController::class, 'linkPql']);
+$router->post('/test-runs/{id}/results/{rid}/pql/sync', [TestRunController::class, 'syncPql']);
 $router->post('/test-runs/{id}/results/{rid}', [TestRunController::class, 'updateResult']);
 $router->get('/test-runs/{id}/results/{rid}/report', [TestRunController::class, 'downloadReport']);
 $router->post('/test-runs/{id}/results/{rid}/entry', [TestRunController::class, 'createEntry']);

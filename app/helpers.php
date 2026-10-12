@@ -1338,12 +1338,20 @@ function getMigrations(): array {
         "ALTER TABLE test_run_results ADD COLUMN IF NOT EXISTS report_file_name VARCHAR(255) NULL",
         "ALTER TABLE test_run_results ADD COLUMN IF NOT EXISTS report_link VARCHAR(500) NULL",
 
-        // Test Run: link to a PQL (Jira) Test Request ticket, whose Jira status
-        // gets fetched and displayed - not a RoboDoc-managed status, just a
-        // mirror of whatever the linked ticket currently says.
+        // Superseded by the per-result PQL link below (a PQL Test Request maps
+        // to one test case, not a whole run) - left in place, unused, rather
+        // than dropping columns that already shipped to Staging/RedHat.
         "ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS pql_issue_key VARCHAR(50) NULL DEFAULT NULL",
         "ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS pql_status VARCHAR(100) NULL DEFAULT NULL",
         "ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS pql_synced_at DATETIME NULL DEFAULT NULL",
+
+        // Test Run result (one test case within a run): link to a PQL (Jira)
+        // Test Request ticket, whose Jira status gets fetched and displayed -
+        // not a RoboDoc-managed status, just a mirror of whatever the linked
+        // ticket currently says.
+        "ALTER TABLE test_run_results ADD COLUMN IF NOT EXISTS pql_issue_key VARCHAR(50) NULL DEFAULT NULL",
+        "ALTER TABLE test_run_results ADD COLUMN IF NOT EXISTS pql_status VARCHAR(100) NULL DEFAULT NULL",
+        "ALTER TABLE test_run_results ADD COLUMN IF NOT EXISTS pql_synced_at DATETIME NULL DEFAULT NULL",
 
         // New initial result status "new" (not started yet), ahead of "pending"
         // (actually running) - existing rows keep whatever they already have,
@@ -1415,6 +1423,9 @@ function runPortableMigrations(): void {
         'report_file_path' => 'VARCHAR(500) NULL',
         'report_file_name' => 'VARCHAR(255) NULL',
         'report_link'      => 'VARCHAR(500) NULL',
+        'pql_issue_key'    => 'VARCHAR(50) NULL',
+        'pql_status'       => 'VARCHAR(100) NULL',
+        'pql_synced_at'    => 'DATETIME NULL',
     ] as $col => $def) {
         try {
             $stmt = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='test_run_results' AND COLUMN_NAME=?");
@@ -1424,6 +1435,9 @@ function runPortableMigrations(): void {
             }
         } catch (\Throwable) {}
     }
+    // Superseded by the per-result pql_* columns above - kept only so a
+    // fresh RedHat DB matches the (unused) test_runs.pql_* columns that
+    // already shipped there.
     foreach ([
         'pql_issue_key' => 'VARCHAR(50) NULL',
         'pql_status'    => 'VARCHAR(100) NULL',

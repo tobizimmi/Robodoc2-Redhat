@@ -18,30 +18,7 @@ $allUsers = $allUsers ?? [];
 <a href="<?= url('test-runs/' . $run['id'] . '/edit') ?>" class="btn btn-outline-secondary btn-sm"><i class="bi bi-pencil"></i></a>
 </div>
 
-<!-- PQL (Jira Test Request) link -->
-<div class="d-flex align-items-center gap-2 mb-3 flex-wrap" id="pqlRow">
-  <?php $jiraBase = rtrim(appSetting('jira_url') ?: '', '/'); ?>
-  <?php if (!empty($run['pql_issue_key'])): ?>
-  <span class="badge bg-dark border border-info text-info d-flex align-items-center gap-1" style="font-size:.8rem">
-    <i class="bi bi-link-45deg"></i>
-    <?php if ($jiraBase): ?>
-    <a href="<?= e($jiraBase . '/browse/' . $run['pql_issue_key']) ?>" target="_blank" rel="noopener" class="text-info text-decoration-none"><?= e($run['pql_issue_key']) ?></a>
-    <?php else: ?><?= e($run['pql_issue_key']) ?><?php endif; ?>
-    <?php if (!empty($run['pql_status'])): ?>
-    <span class="badge bg-info text-dark ms-1"><?= e($run['pql_status']) ?></span>
-    <?php endif; ?>
-  </span>
-  <small class="text-muted" id="pqlSyncedAt"><?= !empty($run['pql_synced_at']) ? ('zuletzt geprüft: ' . formatDate($run['pql_synced_at'], 'd.m.Y H:i')) : '' ?></small>
-  <?php if (Auth::canEdit('testing')): ?>
-  <button type="button" class="btn btn-outline-info btn-sm py-0 px-1" onclick="pqlSync('<?= e(Auth::csrfToken()) ?>')" title="PQL-Status aktualisieren"><i class="bi bi-arrow-repeat" style="font-size:.75rem"></i></button>
-  <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1" onclick="pqlEdit()" title="Verknüpfung ändern"><i class="bi bi-pencil" style="font-size:.7rem"></i></button>
-  <?php endif; ?>
-  <?php elseif (Auth::canEdit('testing')): ?>
-  <button type="button" class="btn btn-outline-info btn-sm py-0 px-2" onclick="pqlEdit()">
-    <i class="bi bi-link-45deg me-1"></i>PQL-Auftrag verknüpfen
-  </button>
-  <?php endif; ?>
-</div>
+<?php $jiraBase = rtrim(appSetting('jira_url') ?: '', '/'); ?>
 
 <?php if ($activeSession): ?>
 <div class="alert alert-info py-2 small mb-3">
@@ -258,6 +235,25 @@ $allUsers = $allUsers ?? [];
             <?php endforeach; ?>
             <?php if (Auth::canEdit('testing')): ?>
             <button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="addBugModal(<?= $r['id'] ?>,'<?= e(Auth::csrfToken()) ?>')" title="Bug verknuepfen"><i class="bi bi-bug" style="font-size:.7rem"></i></button>
+            <?php endif; ?>
+          </div>
+          <div class="d-flex align-items-center gap-1 flex-wrap">
+            <?php if (!empty($r['pql_issue_key'])): ?>
+            <span class="badge bg-dark border border-info text-info d-flex align-items-center gap-1">
+              <i class="bi bi-link-45deg"></i>
+              <?php if ($jiraBase): ?>
+              <a href="<?= e($jiraBase . '/browse/' . $r['pql_issue_key']) ?>" target="_blank" rel="noopener" class="text-info text-decoration-none"><?= e($r['pql_issue_key']) ?></a>
+              <?php else: ?><?= e($r['pql_issue_key']) ?><?php endif; ?>
+              <?php if (!empty($r['pql_status'])): ?>
+              <span class="badge bg-info text-dark ms-1"><?= e($r['pql_status']) ?></span>
+              <?php endif; ?>
+            </span>
+            <?php if (Auth::canEdit('testing')): ?>
+            <button type="button" class="btn btn-outline-info btn-sm py-0 px-1" onclick="pqlSync(<?= $r['id'] ?>,'<?= e(Auth::csrfToken()) ?>')" title="PQL-Status aktualisieren"><i class="bi bi-arrow-repeat" style="font-size:.7rem"></i></button>
+            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1" onclick="pqlEdit(<?= $r['id'] ?>)" title="Verknüpfung ändern"><i class="bi bi-pencil" style="font-size:.65rem"></i></button>
+            <?php endif; ?>
+            <?php elseif (Auth::canEdit('testing')): ?>
+            <button type="button" class="btn btn-outline-info btn-sm py-0 px-1" onclick="pqlEdit(<?= $r['id'] ?>)" title="PQL-Auftrag verknüpfen"><i class="bi bi-link-45deg" style="font-size:.7rem"></i> PQL</button>
             <?php endif; ?>
           </div>
         </div>
@@ -863,17 +859,18 @@ function synapseSync(runId, csrf) {
 <script>
 const _runId = <?= $run['id'] ?>;
 let _tCsrf = '', _bCsrf = '';
+const _pqlCsrf = '<?= e(Auth::csrfToken()) ?>';
+const _pqlKeys = {<?php foreach ($results as $r) echo (int)$r['id'] . ':' . json_encode($r['pql_issue_key'] ?? '') . ','; ?>};
 
-function pqlEdit() {
-  const cur = <?= json_encode($run['pql_issue_key'] ?? '') ?>;
-  const key = prompt('PQL Jira-Key (z.B. PQL-123), leer lassen zum Entfernen:', cur || '');
+function pqlEdit(rid) {
+  const key = prompt('PQL Jira-Key (z.B. PQL-123), leer lassen zum Entfernen:', _pqlKeys[rid] || '');
   if (key === null) return;
   const btn = event.target.closest('button');
   const orig = btn ? btn.innerHTML : '';
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'; }
-  fetch('<?= url('test-runs/' . $run['id'] . '/pql') ?>', {
+  fetch('<?= url('test-runs/' . $run['id'] . '/results/') ?>' + rid + '/pql', {
     method: 'POST',
-    body: new URLSearchParams({ _csrf: '<?= e(Auth::csrfToken()) ?>', pql_issue_key: key.trim() })
+    body: new URLSearchParams({ _csrf: _pqlCsrf, pql_issue_key: key.trim() })
   })
   .then(r => r.json())
   .then(d => {
@@ -883,12 +880,12 @@ function pqlEdit() {
   .catch(() => { alert('Netzwerkfehler'); if (btn) { btn.disabled = false; btn.innerHTML = orig; } });
 }
 
-function pqlSync(csrf) {
+function pqlSync(rid, csrf) {
   const btn = event.target.closest('button');
   const orig = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-  fetch('<?= url('test-runs/' . $run['id'] . '/pql/sync') ?>', {
+  fetch('<?= url('test-runs/' . $run['id'] . '/results/') ?>' + rid + '/pql/sync', {
     method: 'POST',
     body: new URLSearchParams({ _csrf: csrf })
   })

@@ -303,14 +303,14 @@ class TestRunController {
         redirect('/test-runs/' . $id);
     }
 
-    // ── PQL (Jira Test Request) link ───────────────────────────────
-    public static function linkPql(string $id): void {
+    // ── PQL (Jira Test Request) link - one per test result, not per run ──
+    public static function linkPql(string $id, string $rid): void {
         Auth::requireEdit('testing');
         header('Content-Type: application/json');
         Auth::verifyCsrf();
         $key = strtoupper(trim($_POST['pql_issue_key'] ?? ''));
         if ($key === '') {
-            Database::execute('UPDATE test_runs SET pql_issue_key=NULL, pql_status=NULL, pql_synced_at=NULL WHERE id=?', [(int)$id]);
+            Database::execute('UPDATE test_run_results SET pql_issue_key=NULL, pql_status=NULL, pql_synced_at=NULL WHERE id=? AND test_run_id=?', [(int)$rid, (int)$id]);
             echo json_encode(['success' => true, 'pql_issue_key' => null]);
             exit;
         }
@@ -318,27 +318,27 @@ class TestRunController {
             echo json_encode(['error' => 'Ungültiges Format - erwartet z.B. PQL-123.']);
             exit;
         }
-        Database::execute('UPDATE test_runs SET pql_issue_key=?, pql_status=NULL, pql_synced_at=NULL WHERE id=?', [$key, (int)$id]);
+        Database::execute('UPDATE test_run_results SET pql_issue_key=?, pql_status=NULL, pql_synced_at=NULL WHERE id=? AND test_run_id=?', [$key, (int)$rid, (int)$id]);
         $result = JiraController::fetchIssueStatus($key);
         if ($result['ok']) {
-            Database::execute('UPDATE test_runs SET pql_status=?, pql_synced_at=NOW() WHERE id=?', [$result['status'], (int)$id]);
+            Database::execute('UPDATE test_run_results SET pql_status=?, pql_synced_at=NOW() WHERE id=? AND test_run_id=?', [$result['status'], (int)$rid, (int)$id]);
         }
         echo json_encode(['success' => true, 'pql_issue_key' => $key] + $result);
         exit;
     }
 
-    public static function syncPql(string $id): void {
+    public static function syncPql(string $id, string $rid): void {
         Auth::requireEdit('testing');
         header('Content-Type: application/json');
         Auth::verifyCsrf();
-        $run = Database::fetchOne('SELECT pql_issue_key FROM test_runs WHERE id=?', [(int)$id]);
-        if (!$run || !$run['pql_issue_key']) {
+        $result2 = Database::fetchOne('SELECT pql_issue_key FROM test_run_results WHERE id=? AND test_run_id=?', [(int)$rid, (int)$id]);
+        if (!$result2 || !$result2['pql_issue_key']) {
             echo json_encode(['error' => 'Kein PQL-Ticket verknüpft.']);
             exit;
         }
-        $result = JiraController::fetchIssueStatus($run['pql_issue_key']);
+        $result = JiraController::fetchIssueStatus($result2['pql_issue_key']);
         if ($result['ok']) {
-            Database::execute('UPDATE test_runs SET pql_status=?, pql_synced_at=NOW() WHERE id=?', [$result['status'], (int)$id]);
+            Database::execute('UPDATE test_run_results SET pql_status=?, pql_synced_at=NOW() WHERE id=? AND test_run_id=?', [$result['status'], (int)$rid, (int)$id]);
         }
         echo json_encode($result);
         exit;
