@@ -18,6 +18,31 @@ $allUsers = $allUsers ?? [];
 <a href="<?= url('test-runs/' . $run['id'] . '/edit') ?>" class="btn btn-outline-secondary btn-sm"><i class="bi bi-pencil"></i></a>
 </div>
 
+<!-- PQL (Jira Test Request) link -->
+<div class="d-flex align-items-center gap-2 mb-3 flex-wrap" id="pqlRow">
+  <?php $jiraBase = rtrim(appSetting('jira_url') ?: '', '/'); ?>
+  <?php if (!empty($run['pql_issue_key'])): ?>
+  <span class="badge bg-dark border border-info text-info d-flex align-items-center gap-1" style="font-size:.8rem">
+    <i class="bi bi-link-45deg"></i>
+    <?php if ($jiraBase): ?>
+    <a href="<?= e($jiraBase . '/browse/' . $run['pql_issue_key']) ?>" target="_blank" rel="noopener" class="text-info text-decoration-none"><?= e($run['pql_issue_key']) ?></a>
+    <?php else: ?><?= e($run['pql_issue_key']) ?><?php endif; ?>
+    <?php if (!empty($run['pql_status'])): ?>
+    <span class="badge bg-info text-dark ms-1"><?= e($run['pql_status']) ?></span>
+    <?php endif; ?>
+  </span>
+  <small class="text-muted" id="pqlSyncedAt"><?= !empty($run['pql_synced_at']) ? ('zuletzt geprüft: ' . formatDate($run['pql_synced_at'], 'd.m.Y H:i')) : '' ?></small>
+  <?php if (Auth::canEdit('testing')): ?>
+  <button type="button" class="btn btn-outline-info btn-sm py-0 px-1" onclick="pqlSync('<?= e(Auth::csrfToken()) ?>')" title="PQL-Status aktualisieren"><i class="bi bi-arrow-repeat" style="font-size:.75rem"></i></button>
+  <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1" onclick="pqlEdit()" title="Verknüpfung ändern"><i class="bi bi-pencil" style="font-size:.7rem"></i></button>
+  <?php endif; ?>
+  <?php elseif (Auth::canEdit('testing')): ?>
+  <button type="button" class="btn btn-outline-info btn-sm py-0 px-2" onclick="pqlEdit()">
+    <i class="bi bi-link-45deg me-1"></i>PQL-Auftrag verknüpfen
+  </button>
+  <?php endif; ?>
+</div>
+
 <?php if ($activeSession): ?>
 <div class="alert alert-info py-2 small mb-3">
   <i class="bi bi-camera-video me-1"></i>Active Session: <strong><?= e($activeSession['title']) ?></strong> ? new test entries will be linked to it.
@@ -28,9 +53,9 @@ $allUsers = $allUsers ?? [];
 <div class="row g-3 mb-4">
   <?php
   $pct = $stats['total'] ? round($stats['passed'] / $stats['total'] * 100) : 0;
-  foreach ([['Gesamt','total','secondary'],['Bestanden','passed','success'],['Fehlgeschlagen','failed','danger'],['Offen','pending','secondary']] as [$l,$k,$c]):
+  foreach ([['Gesamt','total','secondary'],['Neu','new','info'],['Bestanden','passed','success'],['Fehlgeschlagen','failed','danger'],['Offen','pending','secondary']] as [$l,$k,$c]):
   ?>
-  <div class="col-6 col-md-3">
+  <div class="col-6 col-md">
     <div class="card stat-card" style="border-left-color:var(--bs-<?= $c ?>)">
       <div class="card-body p-3">
         <div class="text-muted small"><?= $l ?></div>
@@ -91,7 +116,7 @@ $allUsers = $allUsers ?? [];
   <div class="card-header border-secondary fw-semibold small">Testergebnisse</div>
   <div class="list-group list-group-flush">
     <?php foreach ($results as $r): ?>
-    <?php $sc = ['pending'=>'secondary','passed'=>'success','failed'=>'danger','skipped'=>'secondary','blocked'=>'warning']; ?>
+    <?php $sc = ['new'=>'info','pending'=>'secondary','passed'=>'success','failed'=>'danger','skipped'=>'secondary','blocked'=>'warning']; ?>
     <div class="list-group-item bg-transparent border-secondary py-2 px-3">
       <div class="d-flex align-items-start justify-content-between">
         <div class="flex-grow-1 me-3">
@@ -413,7 +438,7 @@ $allUsers = $allUsers ?? [];
           <div class="row g-2">
             <div class="col-md-3">
               <select name="status" class="form-select form-select-sm">
-                <?php foreach (['pending'=>'Pending','passed'=>'Passed','failed'=>'Failed','skipped'=>'Skipped','blocked'=>'Blocked'] as $v=>$l): ?>
+                <?php foreach (['new'=>'New','pending'=>'Pending','passed'=>'Passed','failed'=>'Failed','skipped'=>'Skipped','blocked'=>'Blocked'] as $v=>$l): ?>
                 <option value="<?= $v ?>" <?= $r['status']===$v?'selected':'' ?>><?= $l ?></option>
                 <?php endforeach; ?>
               </select>
@@ -838,6 +863,43 @@ function synapseSync(runId, csrf) {
 <script>
 const _runId = <?= $run['id'] ?>;
 let _tCsrf = '', _bCsrf = '';
+
+function pqlEdit() {
+  const cur = <?= json_encode($run['pql_issue_key'] ?? '') ?>;
+  const key = prompt('PQL Jira-Key (z.B. PQL-123), leer lassen zum Entfernen:', cur || '');
+  if (key === null) return;
+  const btn = event.target.closest('button');
+  const orig = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'; }
+  fetch('<?= url('test-runs/' . $run['id'] . '/pql') ?>', {
+    method: 'POST',
+    body: new URLSearchParams({ _csrf: '<?= e(Auth::csrfToken()) ?>', pql_issue_key: key.trim() })
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.error) { alert(d.error); if (btn) { btn.disabled = false; btn.innerHTML = orig; } return; }
+    location.reload();
+  })
+  .catch(() => { alert('Netzwerkfehler'); if (btn) { btn.disabled = false; btn.innerHTML = orig; } });
+}
+
+function pqlSync(csrf) {
+  const btn = event.target.closest('button');
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+  fetch('<?= url('test-runs/' . $run['id'] . '/pql/sync') ?>', {
+    method: 'POST',
+    body: new URLSearchParams({ _csrf: csrf })
+  })
+  .then(r => r.json())
+  .then(d => {
+    btn.disabled = false; btn.innerHTML = orig;
+    if (d.error) { alert(d.error); return; }
+    location.reload();
+  })
+  .catch(() => { btn.disabled = false; btn.innerHTML = orig; alert('Netzwerkfehler'); });
+}
 
 function assignTester(rid, csrf) {
   _tCsrf = csrf;

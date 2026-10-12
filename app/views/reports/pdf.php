@@ -360,6 +360,7 @@ if ($curRow) $blockRows[] = $curRow;
 <?php
 $td = $data['testData'] ?? [];
 $ts2 = $td['stats'] ?? [];
+$tNew     = (int)($ts2['new']     ?? 0);
 $tPassed  = (int)($ts2['passed']  ?? 0);
 $tFailed  = (int)($ts2['failed']  ?? 0);
 $tPending = (int)($ts2['pending'] ?? 0);
@@ -385,9 +386,9 @@ $tCycles  = $td['cycles'] ?? [];
   <?php endif; ?>
   <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
     <?php
-    $pieColors = ['#10b981','#ef4444','#f59e0b','#3b82f6','#6b7280'];
-    $pieVals   = [$tPassed,$tFailed,$tPending,$tSkipped,$tBlocked];
-    $pieLabels = ['Bestanden','Fehlgeschlagen','Ausstehend','Übersprungen','Blockiert'];
+    $pieColors = ['#10b981','#ef4444','#f59e0b','#3b82f6','#6b7280','#818cf8'];
+    $pieVals   = [$tPassed,$tFailed,$tPending,$tSkipped,$tBlocked,$tNew];
+    $pieLabels = ['Bestanden','Fehlgeschlagen','Ausstehend','Übersprungen','Blockiert','Neu'];
     $pieR = 40; $pieCx = 50; $pieCy = 50;
     $pieStart = -M_PI/2;
     $piePaths = '';

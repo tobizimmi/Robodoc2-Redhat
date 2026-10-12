@@ -87,7 +87,8 @@ class TestPlanController {
                 $allSteps[$sr['test_plan_item_id']][] = $sr;
             }
         }
-        View::render('test-plans/show', compact('plan', 'items', 'runs', 'cycles', 'runsWithoutCycle', 'runsByCycle', 'customFields', 'customValues', 'testRequests', 'allSteps') + ['title' => $plan['name']]);
+        $categories = Database::fetchAll('SELECT * FROM test_categories WHERE project_id=? ORDER BY sort_order, name', [(int)$plan['project_id']]);
+        View::render('test-plans/show', compact('plan', 'items', 'runs', 'cycles', 'runsWithoutCycle', 'runsByCycle', 'customFields', 'customValues', 'testRequests', 'allSteps', 'categories') + ['title' => $plan['name']]);
     }
 
     public static function cyclesJson(string $id): void {
@@ -149,11 +150,13 @@ class TestPlanController {
         Auth::verifyCsrf();
         $title  = trim($_POST['title'] ?? '');
         if (!$title) { flash('error', 'Titel erforderlich.'); redirect('/test-plans/' . $id); }
+        $categoryId = (int)($_POST['category_id'] ?? 0) ?: null;
         $itemId = Database::insert(
-            'INSERT INTO test_plan_items (test_plan_id, title, description, expected_result, priority, status, sort_order) VALUES (?,?,?,?,?,?,?)',
+            'INSERT INTO test_plan_items (test_plan_id, title, description, expected_result, priority, status, sort_order, category_id) VALUES (?,?,?,?,?,?,?,?)',
             [(int)$id, $title, trim($_POST['description'] ?? ''), trim($_POST['expected_result'] ?? ''),
              $_POST['priority'] ?? 'medium', 'pending',
-             (int)Database::fetchOne('SELECT COUNT(*) c FROM test_plan_items WHERE test_plan_id=?', [(int)$id])['c']]
+             (int)Database::fetchOne('SELECT COUNT(*) c FROM test_plan_items WHERE test_plan_id=?', [(int)$id])['c'],
+             $categoryId]
         );
         self::saveCustomFieldValues($itemId);
         flash('success', 'Item added.');
@@ -228,8 +231,9 @@ class TestPlanController {
         if (!$item) abort(404, 'Test Case nicht gefunden');
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Auth::verifyCsrf();
-            Database::execute('UPDATE test_plan_items SET title=?, description=?, expected_result=?, priority=?, status=? WHERE id=? AND test_plan_id=?',
-                [trim($_POST['title']), trim($_POST['description']??''), trim($_POST['expected_result']??''), $_POST['priority']??'medium', $_POST['status']??'pending', (int)$iid, (int)$id]);
+            $categoryId = (int)($_POST['category_id'] ?? 0) ?: null;
+            Database::execute('UPDATE test_plan_items SET title=?, description=?, expected_result=?, priority=?, status=?, category_id=? WHERE id=? AND test_plan_id=?',
+                [trim($_POST['title']), trim($_POST['description']??''), trim($_POST['expected_result']??''), $_POST['priority']??'medium', $_POST['status']??'pending', $categoryId, (int)$iid, (int)$id]);
             self::saveCustomFieldValues((int)$iid);
             flash('success', 'Test Case aktualisiert.');
             redirect('/test-plans/' . $id);
@@ -239,8 +243,9 @@ class TestPlanController {
         foreach (Database::fetchAll('SELECT * FROM test_case_field_values WHERE item_id=?', [(int)$iid]) as $r) {
             $customValues[$r['field_id']] = $r['value'];
         }
+        $categories = Database::fetchAll('SELECT * FROM test_categories WHERE project_id=? ORDER BY sort_order, name', [(int)$plan['project_id']]);
         $steps = Database::fetchAll('SELECT * FROM test_case_steps WHERE test_plan_item_id=? ORDER BY step_number', [(int)$iid]);
-        View::render('test-plans/edit-item', compact('plan', 'item', 'customFields', 'customValues', 'steps') + ['title' => 'Test Case bearbeiten']);
+        View::render('test-plans/edit-item', compact('plan', 'item', 'customFields', 'customValues', 'steps', 'categories') + ['title' => 'Test Case bearbeiten']);
     }
 
     public static function deleteItem(string $id, string $iid): void {

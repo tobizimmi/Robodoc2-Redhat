@@ -225,7 +225,7 @@ class ReportController
         if (!$cycles) return [];
 
         $stats = Database::fetchOne(
-            "SELECT SUM(trr.status='passed') passed, SUM(trr.status='failed') failed,
+            "SELECT SUM(trr.status='new') new, SUM(trr.status='passed') passed, SUM(trr.status='failed') failed,
                     SUM(trr.status='pending') pending, SUM(trr.status='skipped') skipped,
                     SUM(trr.status='blocked') blocked, COUNT(trr.id) total
              FROM test_runs tr
@@ -236,6 +236,7 @@ class ReportController
         $runs = Database::fetchAll(
             "SELECT tr.*,
                     COUNT(trr.id) result_count,
+                    SUM(trr.status='new') new,
                     SUM(trr.status='passed') passed, SUM(trr.status='failed') failed,
                     SUM(trr.status='pending') pending
              FROM test_runs tr

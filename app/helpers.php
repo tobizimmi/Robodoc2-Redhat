@@ -1337,6 +1337,31 @@ function getMigrations(): array {
         "ALTER TABLE test_run_results ADD COLUMN IF NOT EXISTS report_file_path VARCHAR(500) NULL",
         "ALTER TABLE test_run_results ADD COLUMN IF NOT EXISTS report_file_name VARCHAR(255) NULL",
         "ALTER TABLE test_run_results ADD COLUMN IF NOT EXISTS report_link VARCHAR(500) NULL",
+
+        // Test Run: link to a PQL (Jira) Test Request ticket, whose Jira status
+        // gets fetched and displayed - not a RoboDoc-managed status, just a
+        // mirror of whatever the linked ticket currently says.
+        "ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS pql_issue_key VARCHAR(50) NULL DEFAULT NULL",
+        "ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS pql_status VARCHAR(100) NULL DEFAULT NULL",
+        "ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS pql_synced_at DATETIME NULL DEFAULT NULL",
+
+        // New initial result status "new" (not started yet), ahead of "pending"
+        // (actually running) - existing rows keep whatever they already have,
+        // only the enum and the default for newly-created rows change.
+        "ALTER TABLE test_run_results MODIFY COLUMN status ENUM('new','pending','passed','failed','skipped','blocked') NOT NULL DEFAULT 'new'",
+
+        // Freely-creatable categories to group test cases in the per-project
+        // overview table (collapsible sections).
+        "CREATE TABLE IF NOT EXISTS test_categories (
+            id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            project_id INT UNSIGNED NOT NULL,
+            name       VARCHAR(191) NOT NULL,
+            color      VARCHAR(20) NULL,
+            sort_order INT NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT fk_tcat_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        "ALTER TABLE test_plan_items ADD COLUMN IF NOT EXISTS category_id INT UNSIGNED NULL DEFAULT NULL",
     ];
 }
 
@@ -1399,6 +1424,26 @@ function runPortableMigrations(): void {
             }
         } catch (\Throwable) {}
     }
+    foreach ([
+        'pql_issue_key' => 'VARCHAR(50) NULL',
+        'pql_status'    => 'VARCHAR(100) NULL',
+        'pql_synced_at' => 'DATETIME NULL',
+    ] as $col => $def) {
+        try {
+            $stmt = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='test_runs' AND COLUMN_NAME=?");
+            $stmt->execute([$col]);
+            if (!$stmt->fetchColumn()) {
+                $pdo->exec("ALTER TABLE test_runs ADD COLUMN $col $def");
+            }
+        } catch (\Throwable) {}
+    }
+    try {
+        $stmt = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='test_plan_items' AND COLUMN_NAME='category_id'");
+        $stmt->execute();
+        if (!$stmt->fetchColumn()) {
+            $pdo->exec("ALTER TABLE test_plan_items ADD COLUMN category_id INT UNSIGNED NULL DEFAULT NULL");
+        }
+    } catch (\Throwable) {}
 }
 
 function runMigrations(): void {

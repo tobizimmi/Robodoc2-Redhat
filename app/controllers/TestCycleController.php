@@ -84,6 +84,7 @@ class TestCycleController
         $runs = Database::fetchAll(
             "SELECT tr.*,
                     COUNT(trr.id)             result_count,
+                    SUM(trr.status='new')     new,
                     SUM(trr.status='passed')  passed,
                     SUM(trr.status='failed')  failed,
                     SUM(trr.status='pending') pending,
@@ -100,6 +101,7 @@ class TestCycleController
         // Aggregate stats for pie chart
         $stats = Database::fetchOne(
             "SELECT
+                SUM(trr.status='new')     new,
                 SUM(trr.status='passed')  passed,
                 SUM(trr.status='failed')  failed,
                 SUM(trr.status='pending') pending,

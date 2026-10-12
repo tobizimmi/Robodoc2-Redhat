@@ -5,6 +5,8 @@ $cycles  = $cycles ?? [];
 $runsWithoutCycle = $runsWithoutCycle ?? [];
 $allSteps = $allSteps ?? [];
 $runsByCycle = $runsByCycle ?? [];
+$categories = $categories ?? [];
+$categoriesById = array_column($categories, null, 'id');
 
 // Overall progress across all cycles
 $totR = 0; $totP = 0; $totF = 0;
@@ -78,12 +80,25 @@ $totPct = $totR > 0 ? round($totP/$totR*100) : 0;
   </div>
   <?php if ($canEdit): ?>
   <div class="card-body border-bottom border-secondary pb-3">
-    <form method="POST" action="<?= url('test-plans/'.$plan['id'].'/items') ?>">
+    <form method="POST" action="<?= url('test-plans/'.$plan['id'].'/items') ?>" id="addItemForm">
       <?= csrfField() ?>
       <div class="row g-2">
         <div class="col-md-7"><input type="text" name="title" class="form-control form-control-sm" placeholder="Title *" required></div>
         <div class="col-md-2"><select name="priority" class="form-select form-select-sm"><option value="low">Niedrig</option><option value="medium" selected>Mittel</option><option value="high">Hoch</option><option value="critical">Kritisch</option></select></div>
         <div class="col-md-3"><button class="btn btn-primary btn-sm w-100">Add</button></div>
+        <div class="col-md-8">
+          <select name="category_id" id="addItemCategory" class="form-select form-select-sm">
+            <option value="">— Keine Kategorie —</option>
+            <?php foreach ($categories as $cat): ?>
+            <option value="<?= $cat['id'] ?>"><?= e($cat['name']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <button type="button" class="btn btn-outline-secondary btn-sm w-100" onclick="newCategory(<?= (int)$plan['project_id'] ?>, '<?= e($csrf) ?>', 'addItemCategory')">
+            <i class="bi bi-plus-lg me-1"></i>Neue Kategorie
+          </button>
+        </div>
         <div class="col-12"><textarea name="description" class="form-control form-control-sm" rows="2" placeholder="Description (optional)"></textarea></div>
         <div class="col-12"><textarea name="expected_result" class="form-control form-control-sm" rows="2" placeholder="Erwartetes Ergebnis (optional)"></textarea></div>
       </div>
@@ -102,6 +117,9 @@ $totPct = $totR > 0 ? round($totP/$totR*100) : 0;
         <div class="flex-grow-1">
           <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
             <span class="fw-semibold small"><?= e($item['title']) ?></span>
+            <?php if (!empty($item['category_id']) && isset($categoriesById[$item['category_id']])): ?>
+            <span class="badge bg-secondary" style="font-size:.6rem"><i class="bi bi-tag me-1"></i><?= e($categoriesById[$item['category_id']]['name']) ?></span>
+            <?php endif; ?>
             <?php if (!empty($item['synapse_key'])): ?>
             <span class="badge bg-dark border border-warning text-warning" style="font-size:.6rem" title="Status: <?= e($item['synapse_status'] ?? '') ?>">
               <i class="bi bi-link-45deg me-1"></i><?= e($item['synapse_key']) ?>
@@ -360,6 +378,28 @@ $totPct = $totR > 0 ? round($totP/$totR*100) : 0;
 
 <script>
 const _csrf = '<?= e($csrf) ?>';
+
+// Freely create a new category and select it in the given <select> - reused
+// on the Test Case edit page too.
+function newCategory(projectId, csrf, selectId) {
+  const name = prompt('Name der neuen Kategorie:');
+  if (!name || !name.trim()) return;
+  fetch('<?= url('test-categories') ?>', {
+    method: 'POST',
+    body: new URLSearchParams({ _csrf: csrf, project_id: projectId, name: name.trim() })
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.error) { alert(d.error); return; }
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    const opt = document.createElement('option');
+    opt.value = d.id; opt.textContent = d.name;
+    sel.appendChild(opt);
+    sel.value = d.id;
+  })
+  .catch(() => alert('Netzwerkfehler'));
+}
 
 function synapseSyncPlan(planId, csrf) {
   const btn = event.target.closest('button');

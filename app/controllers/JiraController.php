@@ -1038,6 +1038,33 @@ class JiraController
               'differs'          => $anyDiffers]);
     }
 
+    // -- Fetch just the current status of an arbitrary Jira issue (e.g. a PQL
+    // Test Request linked to a Test Run) - no local entry involved, no mapping,
+    // just whatever Jira currently says. --
+    public static function fetchIssueStatus(string $issueKey): array
+    {
+        [, $apiBase, $authHeader, $err] = self::resolveAuth();
+        if ($err) return ['ok' => false, 'error' => $err];
+
+        $ch = curl_init("$apiBase/issue/" . rawurlencode($issueKey) . "?fields=status,summary");
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER     => ['Accept: application/json', 'Authorization: ' . $authHeader],
+            CURLOPT_TIMEOUT        => 10,
+            CURLOPT_SSL_VERIFYPEER => true,
+        ]);
+        $raw  = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        $data = json_decode($raw ?: '{}', true) ?? [];
+
+        if ($code === 404) return ['ok' => false, 'error' => "Issue $issueKey nicht gefunden."];
+        $status = $data['fields']['status']['name'] ?? null;
+        if (!$status) return ['ok' => false, 'error' => $data['errorMessages'][0] ?? 'Status konnte nicht geladen werden.'];
+
+        return ['ok' => true, 'status' => $status, 'summary' => $data['fields']['summary'] ?? null];
+    }
+
     // -- Batch sync (called by cron script) -----------------------
     public static function syncAllStatuses(): void
     {

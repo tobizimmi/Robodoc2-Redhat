@@ -147,6 +147,11 @@
           <i class="bi bi-arrow-repeat me-2"></i>Test Cycles
         </a>
       </li>
+      <li class="nav-item">
+        <a href="<?= url('test-overview') ?>" class="nav-link text-white <?= isActive('test-overview') ?>">
+          <i class="bi bi-table me-2"></i>Test Übersicht
+        </a>
+      </li>
       <?php endif; ?>
       <?php if (Auth::canView('inventory')): ?>
       <li class="nav-item">

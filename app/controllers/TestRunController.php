@@ -25,6 +25,7 @@ class TestRunController {
         );
         $stats = [
             'total'   => count($results),
+            'new'     => count(array_filter($results, fn($r) => $r['status'] === 'new')),
             'passed'  => count(array_filter($results, fn($r) => $r['status'] === 'passed')),
             'failed'  => count(array_filter($results, fn($r) => $r['status'] === 'failed')),
             'pending' => count(array_filter($results, fn($r) => $r['status'] === 'pending')),
@@ -103,7 +104,7 @@ class TestRunController {
             foreach ($items as $item) {
                 Database::insert(
                     'INSERT INTO test_run_results (test_run_id, test_plan_item_id, status) VALUES (?,?,?)',
-                    [$runId, $item['id'], 'pending']
+                    [$runId, $item['id'], 'new']
                 );
             }
             Database::execute("UPDATE test_runs SET status='active', started_at=NOW() WHERE id=?", [$runId]);
@@ -302,6 +303,47 @@ class TestRunController {
         redirect('/test-runs/' . $id);
     }
 
+    // ── PQL (Jira Test Request) link ───────────────────────────────
+    public static function linkPql(string $id): void {
+        Auth::requireEdit('testing');
+        header('Content-Type: application/json');
+        Auth::verifyCsrf();
+        $key = strtoupper(trim($_POST['pql_issue_key'] ?? ''));
+        if ($key === '') {
+            Database::execute('UPDATE test_runs SET pql_issue_key=NULL, pql_status=NULL, pql_synced_at=NULL WHERE id=?', [(int)$id]);
+            echo json_encode(['success' => true, 'pql_issue_key' => null]);
+            exit;
+        }
+        if (!preg_match('/^[A-Z][A-Z0-9]+-\d+$/', $key)) {
+            echo json_encode(['error' => 'Ungültiges Format - erwartet z.B. PQL-123.']);
+            exit;
+        }
+        Database::execute('UPDATE test_runs SET pql_issue_key=?, pql_status=NULL, pql_synced_at=NULL WHERE id=?', [$key, (int)$id]);
+        $result = JiraController::fetchIssueStatus($key);
+        if ($result['ok']) {
+            Database::execute('UPDATE test_runs SET pql_status=?, pql_synced_at=NOW() WHERE id=?', [$result['status'], (int)$id]);
+        }
+        echo json_encode(['success' => true, 'pql_issue_key' => $key] + $result);
+        exit;
+    }
+
+    public static function syncPql(string $id): void {
+        Auth::requireEdit('testing');
+        header('Content-Type: application/json');
+        Auth::verifyCsrf();
+        $run = Database::fetchOne('SELECT pql_issue_key FROM test_runs WHERE id=?', [(int)$id]);
+        if (!$run || !$run['pql_issue_key']) {
+            echo json_encode(['error' => 'Kein PQL-Ticket verknüpft.']);
+            exit;
+        }
+        $result = JiraController::fetchIssueStatus($run['pql_issue_key']);
+        if ($result['ok']) {
+            Database::execute('UPDATE test_runs SET pql_status=?, pql_synced_at=NOW() WHERE id=?', [$result['status'], (int)$id]);
+        }
+        echo json_encode($result);
+        exit;
+    }
+
     // ── Tester assignment ────────────────────────────────────────
     public static function assignTester(string $id, string $rid): void {
         Auth::requireEdit('testing');
@@ -364,7 +406,7 @@ class TestRunController {
             if ($exists) continue;
             Database::insert(
                 'INSERT INTO test_run_results (test_run_id, test_plan_item_id, status) VALUES (?,?,?)',
-                [(int)$id, $itemId, 'pending']
+                [(int)$id, $itemId, 'new']
             );
             $added++;
         }

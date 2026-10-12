@@ -1,5 +1,6 @@
 <?php
 $csrf      = Auth::csrfToken();
+$new       = (int)($stats['new']     ?? 0);
 $passed    = (int)($stats['passed']  ?? 0);
 $failed    = (int)($stats['failed']  ?? 0);
 $pending   = (int)($stats['pending'] ?? 0);
@@ -55,6 +56,7 @@ $pct       = $total > 0 ? round($passed / $total * 100) : 0;
       <?php
       $statCards = [
         ['label'=>'Gesamt',    'value'=>$total,   'color'=>'secondary', 'icon'=>'list-check'],
+        ['label'=>'Neu',       'value'=>$new,     'color'=>'primary',   'icon'=>'circle'],
         ['label'=>'Bestanden', 'value'=>$passed,  'color'=>'success',   'icon'=>'check-circle-fill'],
         ['label'=>'Fehlgeschl.','value'=>$failed, 'color'=>'danger',    'icon'=>'x-circle-fill'],
         ['label'=>'Ausstehend','value'=>$pending, 'color'=>'warning',   'icon'=>'clock'],
@@ -223,10 +225,10 @@ document.addEventListener('DOMContentLoaded', function() {
   new Chart(ctx, {
     type: 'doughnut',
     data: {
-      labels: ['Bestanden', 'Fehlgeschlagen', 'Ausstehend', 'Übersprungen', 'Blockiert'],
+      labels: ['Bestanden', 'Fehlgeschlagen', 'Ausstehend', 'Übersprungen', 'Blockiert', 'Neu'],
       datasets: [{
-        data: [<?= $passed ?>, <?= $failed ?>, <?= $pending ?>, <?= $skipped ?>, <?= $blocked ?>],
-        backgroundColor: ['#10b981','#ef4444','#f59e0b','#3b82f6','#6b7280'],
+        data: [<?= $passed ?>, <?= $failed ?>, <?= $pending ?>, <?= $skipped ?>, <?= $blocked ?>, <?= $new ?>],
+        backgroundColor: ['#10b981','#ef4444','#f59e0b','#3b82f6','#6b7280','#818cf8'],
         borderWidth: 2,
         borderColor: '#1e293b',
       }]

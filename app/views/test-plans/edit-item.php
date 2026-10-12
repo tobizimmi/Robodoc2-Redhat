@@ -37,6 +37,20 @@ $canEdit = Auth::canEdit('testing');
               <?php endforeach; ?>
             </select>
           </div>
+          <div class="col-md-8">
+            <label class="form-label">Kategorie</label>
+            <select name="category_id" id="editItemCategory" class="form-select">
+              <option value="">— Keine Kategorie —</option>
+              <?php foreach (($categories ?? []) as $cat): ?>
+              <option value="<?= $cat['id'] ?>" <?= (int)($item['category_id']??0)===(int)$cat['id']?'selected':'' ?>><?= e($cat['name']) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="col-md-4 d-flex align-items-end">
+            <button type="button" class="btn btn-outline-secondary btn-sm w-100" onclick="newCategory(<?= (int)$plan['project_id'] ?>, '<?= e($csrf) ?>', 'editItemCategory')">
+              <i class="bi bi-plus-lg me-1"></i>Neue Kategorie
+            </button>
+          </div>
         </div>
         <div class="mb-3">
           <label class="form-label">Beschreibung</label>
@@ -164,6 +178,26 @@ $canEdit = Auth::canEdit('testing');
 const _planId = <?= $plan['id'] ?>;
 const _itemId = <?= $item['id'] ?>;
 const _base   = '<?= url('test-plans/'.$plan['id'].'/items/'.$item['id']) ?>';
+
+function newCategory(projectId, csrf, selectId) {
+  const name = prompt('Name der neuen Kategorie:');
+  if (!name || !name.trim()) return;
+  fetch('<?= url('test-categories') ?>', {
+    method: 'POST',
+    body: new URLSearchParams({ _csrf: csrf, project_id: projectId, name: name.trim() })
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.error) { alert(d.error); return; }
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    const opt = document.createElement('option');
+    opt.value = d.id; opt.textContent = d.name;
+    sel.appendChild(opt);
+    sel.value = d.id;
+  })
+  .catch(() => alert('Netzwerkfehler'));
+}
 
 function addStep(csrf) {
   const action = document.getElementById('nAction').value.trim();
