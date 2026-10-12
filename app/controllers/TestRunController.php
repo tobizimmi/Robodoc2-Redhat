@@ -145,12 +145,56 @@ class TestRunController {
         Auth::verifyCsrf();
         $status = $_POST['status'] ?? 'pending';
         $notes  = trim($_POST['notes'] ?? '');
+        $link   = trim($_POST['report_link'] ?? '');
+        // Only allow http(s) links - a stored "javascript:" URI would execute
+        // in whoever's browser later clicks it.
+        if ($link !== '' && !preg_match('#^https?://#i', $link)) $link = 'https://' . $link;
+
+        $sets  = ['status=?', 'notes=?', 'executed_by=?', 'executed_at=NOW()', 'report_link=?'];
+        $binds = [$status, $notes, Auth::id(), $link !== '' ? $link : null];
+
+        // Manually created test report upload - optional, additive to the link
+        // above. Leaving the file field empty on a later edit keeps whatever
+        // was uploaded before (only a newly chosen file replaces it).
+        $err = $_FILES['report_file']['error'] ?? UPLOAD_ERR_NO_FILE;
+        if ($err === UPLOAD_ERR_OK) {
+            $origName = $_FILES['report_file']['name'];
+            $safe = preg_replace('/[^a-z0-9._-]/', '_', strtolower(basename($origName)));
+            if (!is_dir(rtrim(UPLOAD_DIR, '/'))) mkdir(rtrim(UPLOAD_DIR, '/'), 0755, true);
+            $dest = UPLOAD_DIR . 'trr' . (int)$rid . '_' . uniqid() . '_' . $safe;
+            if (move_uploaded_file($_FILES['report_file']['tmp_name'], $dest)) {
+                $sets[]  = 'report_file_path=?';
+                $sets[]  = 'report_file_name=?';
+                $binds[] = $dest;
+                $binds[] = $origName;
+            }
+        }
+
+        $binds[] = (int)$rid;
+        $binds[] = (int)$id;
         Database::execute(
-            'UPDATE test_run_results SET status=?, notes=?, executed_by=?, executed_at=NOW() WHERE id=? AND test_run_id=?',
-            [$status, $notes, Auth::id(), (int)$rid, (int)$id]
+            'UPDATE test_run_results SET ' . implode(',', $sets) . ' WHERE id=? AND test_run_id=?',
+            $binds
         );
         flash('success', 'Ergebnis gespeichert.');
         redirect('/test-runs/' . $id);
+    }
+
+    // -- Download the manually-created test report attached to a result. --
+    public static function downloadReport(string $id, string $rid): void {
+        Auth::requireView('testing');
+        $result = Database::fetchOne(
+            'SELECT report_file_path, report_file_name FROM test_run_results WHERE id=? AND test_run_id=?',
+            [(int)$rid, (int)$id]
+        );
+        if (!$result || !$result['report_file_path']) abort(404);
+        $path = $result['report_file_path'];
+        if (!file_exists($path)) abort(404, 'File not found');
+        header('Content-Type: application/octet-stream');
+        header('Content-Disposition: attachment; filename="' . addslashes($result['report_file_name'] ?: basename($path)) . '"');
+        header('Content-Length: ' . filesize($path));
+        readfile($path);
+        exit;
     }
 
     public static function createEntry(string $id, string $rid): void {

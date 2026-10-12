@@ -1332,6 +1332,11 @@ function getMigrations(): array {
         "ALTER TABLE entries ADD COLUMN IF NOT EXISTS live_sync_remote_snapshot TEXT NULL",
         "ALTER TABLE entries ADD COLUMN IF NOT EXISTS live_sync_has_changes TINYINT(1) NOT NULL DEFAULT 0",
         "ALTER TABLE entries ADD COLUMN IF NOT EXISTS live_sync_checked_at DATETIME NULL",
+        // Test Run result: optional manually-created test report, either uploaded
+        // as a file or linked externally (one or the other, or both).
+        "ALTER TABLE test_run_results ADD COLUMN IF NOT EXISTS report_file_path VARCHAR(500) NULL",
+        "ALTER TABLE test_run_results ADD COLUMN IF NOT EXISTS report_file_name VARCHAR(255) NULL",
+        "ALTER TABLE test_run_results ADD COLUMN IF NOT EXISTS report_link VARCHAR(500) NULL",
     ];
 }
 
@@ -1378,6 +1383,19 @@ function runPortableMigrations(): void {
             $stmt->execute([$col]);
             if (!$stmt->fetchColumn()) {
                 $pdo->exec("ALTER TABLE entries ADD COLUMN $col $def");
+            }
+        } catch (\Throwable) {}
+    }
+    foreach ([
+        'report_file_path' => 'VARCHAR(500) NULL',
+        'report_file_name' => 'VARCHAR(255) NULL',
+        'report_link'      => 'VARCHAR(500) NULL',
+    ] as $col => $def) {
+        try {
+            $stmt = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='test_run_results' AND COLUMN_NAME=?");
+            $stmt->execute([$col]);
+            if (!$stmt->fetchColumn()) {
+                $pdo->exec("ALTER TABLE test_run_results ADD COLUMN $col $def");
             }
         } catch (\Throwable) {}
     }

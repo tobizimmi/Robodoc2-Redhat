@@ -106,6 +106,21 @@ $allUsers = $allUsers ?? [];
           <?php if ($r['notes']): ?>
           <div class="text-info small mt-1">Notiz: <?= e($r['notes']) ?></div>
           <?php endif; ?>
+          <?php if (!empty($r['report_file_path']) || !empty($r['report_link'])): ?>
+          <div class="small mt-1 d-flex align-items-center gap-2 flex-wrap">
+            <i class="bi bi-file-earmark-text text-muted"></i>
+            <?php if (!empty($r['report_file_path'])): ?>
+            <a href="<?= url('test-runs/' . $run['id'] . '/results/' . $r['id'] . '/report') ?>" class="text-decoration-none">
+              <?= e($r['report_file_name'] ?: 'Testbericht') ?>
+            </a>
+            <?php endif; ?>
+            <?php if (!empty($r['report_link'])): ?>
+            <a href="<?= e($r['report_link']) ?>" target="_blank" rel="noopener" class="text-decoration-none">
+              <i class="bi bi-box-arrow-up-right me-1"></i>Link
+            </a>
+            <?php endif; ?>
+          </div>
+          <?php endif; ?>
           <!-- Linked test request -->
           <?php if ($r['test_request_id']): ?>
           <div class="mt-1 small">
@@ -393,7 +408,7 @@ $allUsers = $allUsers ?? [];
 
       <!-- Update result collapse -->
       <div class="collapse mt-2" id="result-<?= $r['id'] ?>">
-        <form method="POST" action="<?= url('test-runs/' . $run['id'] . '/results/' . $r['id']) ?>">
+        <form method="POST" action="<?= url('test-runs/' . $run['id'] . '/results/' . $r['id']) ?>" enctype="multipart/form-data">
           <?= csrfField() ?>
           <div class="row g-2">
             <div class="col-md-3">
@@ -404,9 +419,17 @@ $allUsers = $allUsers ?? [];
               </select>
             </div>
             <div class="col-md-7">
-              <input type="text" name="notes" class="form-control form-control-sm" value="<?= e($r['notes']) ?>" placeholder="Notizen?">
+              <textarea name="notes" class="form-control form-control-sm" rows="4" placeholder="Notizen?"><?= e($r['notes']) ?></textarea>
             </div>
             <div class="col-md-2"><button class="btn btn-success btn-sm w-100">Save</button></div>
+            <div class="col-md-6">
+              <label class="form-label small mb-1 text-muted">Testbericht hochladen <span class="text-muted">(ersetzt vorhandenen)</span></label>
+              <input type="file" name="report_file" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small mb-1 text-muted">Oder Link zum Testbericht</label>
+              <input type="url" name="report_link" class="form-control form-control-sm" value="<?= e($r['report_link'] ?? '') ?>" placeholder="https://...">
+            </div>
           </div>
         </form>
       </div>
@@ -892,7 +915,8 @@ function searchBugEntries(q) {
         items.slice(0, 8).map(i => {
           const jk = i.jira_issue_key || '';
           const lbl = (jk ? '<span class="badge bg-dark border border-warning text-warning me-1" style="font-size:.6rem">' + jk + '</span>' : '') + (i.title||'').substring(0, 45);
-          return '<button class="list-group-item list-group-item-action bg-dark border-secondary py-1 text-start" style="font-size:.8rem" onclick="selectBugEntry(' + i.id + ','' + (i.title||'').replace(/'/g, "\'").substring(0,40) + '','' + jk + '')">' + lbl + '</button>';
+          const safeTitle = (i.title||'').replace(/'/g, "\\'").substring(0,40);
+          return '<button class="list-group-item list-group-item-action bg-dark border-secondary py-1 text-start" style="font-size:.8rem" onclick="selectBugEntry(' + i.id + ',\'' + safeTitle + '\',\'' + jk + '\')">' + lbl + '</button>';
         }).join('') + '</div>';
     });
   }, 300);
