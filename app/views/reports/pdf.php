@@ -356,7 +356,7 @@ if ($curRow) $blockRows[] = $curRow;
 ?>
 <div class="block-col w-<?= htmlspecialchars($bw) ?>">
 
-<?php elseif ($btype === 'test_cycle_status'): ?>
+<?php if ($btype === 'test_cycle_status'): ?>
 <?php
 $td = $data['testData'] ?? [];
 $ts2 = $td['stats'] ?? [];
@@ -503,6 +503,7 @@ $tCycle   = $td['cycle'] ?? [];
   </table>
 </div>
 <?php else: ?><div class="section" style="background:#f9fafb;padding:8px;border-radius:4px;font-size:9px;color:#6b7280">Keine verknüpften Einträge.</div><?php endif; ?>
+<?php endif; ?>
 
 <?php if ($btype === 'page_break'): ?>
 </div></div>
