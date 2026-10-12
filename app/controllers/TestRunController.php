@@ -237,10 +237,15 @@ class TestRunController {
         $projectId = $plan['project_id'] ?? null;
         if (!$projectId) { flash('error', 'Test plan has no project.'); redirect('/test-runs/' . $id); }
 
-        // Entry type: use posted value or default to "Test Result"
+        // AJAX requests come from the Bug Modal's "Neuen Bug erstellen" tab -
+        // those should default to the "Bug" entry type, not "Test Result".
+        $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']);
+
+        // Entry type: use posted value or default to "Bug"/"Test Result"
         $entryTypeId = (int)($_POST['entry_type_id'] ?? 0);
         if (!$entryTypeId) {
-            $type = Database::fetchOne("SELECT id FROM entry_types WHERE name='Test Result' LIMIT 1");
+            $defaultTypeName = $isAjax ? 'Bug' : 'Test Result';
+            $type = Database::fetchOne('SELECT id FROM entry_types WHERE name=? LIMIT 1', [$defaultTypeName]);
             $entryTypeId = $type ? (int)$type['id'] : 1;
         }
 
@@ -257,6 +262,14 @@ class TestRunController {
         $temperature      = ($_POST['temperature'] ?? '') !== '' ? (float)$_POST['temperature'] : null;
         $weatherCondition = trim($_POST['weather_condition'] ?? '') ?: null;
 
+        // Bug Modal sends a lowercase short scale (critical/high/medium/low);
+        // the rest of the app uses the capitalized entries.priority scale.
+        $priorityRaw = trim($_POST['priority'] ?? '');
+        $priorityMap = ['critical' => 'Blocker', 'high' => 'High', 'medium' => 'Medium', 'low' => 'Low'];
+        $priority = $priorityMap[$priorityRaw]
+            ?? (in_array($priorityRaw, ['Low', 'Medium', 'High', 'Highest', 'Blocker'], true) ? $priorityRaw : 'Medium');
+        $status = array_key_exists($_POST['status'] ?? '', entryStatuses()) ? $_POST['status'] : 'new';
+
         // Auto-link to active test session if none specified
         $sessionId = (int)($_POST['session_id'] ?? 0) ?: null;
         if (!$sessionId && class_exists('TestSessionController')) {
@@ -266,10 +279,10 @@ class TestRunController {
 
         $entryId = Database::insert(
             'INSERT INTO entries (project_id, entry_type_id, error_category_id, entry_date, entry_time, title, description,
-             firmware_version, app_version, mower_serial, environment_id, is_test_entry, test_run_result_id, created_by)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,1,?,?)',
+             firmware_version, app_version, mower_serial, environment_id, priority, status, is_test_entry, test_run_result_id, created_by)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)',
             [$projectId, $entryTypeId, $errorCategoryId, $entryDate, $entryTime, $title, $description,
-             $firmwareVersion ?: null, $appVersion ?: null, $mowerSerial ?: null, $environmentId,
+             $firmwareVersion ?: null, $appVersion ?: null, $mowerSerial ?: null, $environmentId, $priority, $status,
              (int)$rid, Auth::id()]
         );
 
