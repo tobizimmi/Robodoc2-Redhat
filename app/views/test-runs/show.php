@@ -101,19 +101,36 @@ $allUsers = $allUsers ?? [];
   <div class="list-group list-group-flush">
     <?php foreach ($results as $r): ?>
     <?php $sc = ['new'=>'info','pending'=>'secondary','passed'=>'success','failed'=>'danger','skipped'=>'secondary','blocked'=>'warning']; ?>
-    <div class="list-group-item bg-transparent border-secondary py-2 px-3">
-      <div class="d-flex align-items-start justify-content-between">
-        <div class="flex-grow-1 me-3">
-          <div class="d-flex align-items-center gap-2 mb-1">
-            <span class="badge bg-<?= $sc[$r['status']] ?? 'secondary' ?>"><?= e($r['status']) ?></span>
-            <span class="priority-<?= $r['item_priority'] ?>"><i class="bi bi-flag-fill small"></i></span>
-            <span class="fw-semibold small"><?= e($r['item_title']) ?></span>
-          </div>
+    <div class="list-group-item bg-transparent border-secondary py-3 px-3">
+      <!-- Header: status + priority + title ... actions -->
+      <div class="d-flex align-items-start justify-content-between gap-2">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <span class="badge bg-<?= $sc[$r['status']] ?? 'secondary' ?>"><?= e(ucfirst($r['status'])) ?></span>
+          <span class="priority-<?= $r['item_priority'] ?>"><i class="bi bi-flag-fill small"></i></span>
+          <span class="fw-semibold"><?= e($r['item_title']) ?></span>
+        </div>
+        <div class="d-flex gap-1 flex-shrink-0">
+          <button class="btn btn-outline-info btn-sm py-0 px-2" data-bs-toggle="collapse" data-bs-target="#new-entry-<?= $r['id'] ?>" title="Create Test Entry">
+            <i class="bi bi-journal-plus"></i>
+          </button>
+          <button class="btn btn-outline-secondary btn-sm py-0 px-2" data-bs-toggle="collapse" data-bs-target="#result-<?= $r['id'] ?>">
+            <i class="bi bi-pencil"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Content -->
+      <div class="mt-2">
           <?php if ($r['expected_result']): ?>
-          <div class="text-muted small">Erwartet: <?= e($r['expected_result']) ?></div>
+          <div class="text-muted small mb-1">
+            <span class="text-uppercase text-secondary" style="font-size:.65rem;letter-spacing:.03em">Erwartet</span>
+            <?= linkifyUrls($r['expected_result']) ?>
+          </div>
           <?php endif; ?>
           <?php if ($r['notes']): ?>
-          <div class="text-info small mt-1">Notiz: <?= e($r['notes']) ?></div>
+          <div class="small mb-1 ps-2 border-start border-info border-2 text-info">
+            <?= linkifyUrls($r['notes']) ?>
+          </div>
           <?php endif; ?>
           <?php if (!empty($r['report_file_path']) || !empty($r['report_link'])): ?>
           <div class="small mt-1 d-flex align-items-center gap-2 flex-wrap">
@@ -206,7 +223,7 @@ $allUsers = $allUsers ?? [];
           </div>
           <?php endif; ?>
         </div>
-        <!-- Tester + Bugs row -->
+        <!-- Footer toolbar: tester / bugs / pql -->
         <?php
           $tName = '';
           if (!empty($r['assigned_tester'])) {
@@ -214,7 +231,7 @@ $allUsers = $allUsers ?? [];
           }
           $rBugs = $bugsByResult[$r['id']] ?? [];
         ?>
-        <div class="mt-2 d-flex flex-wrap gap-2 align-items-center" style="font-size:.78rem">
+        <div class="d-flex flex-wrap align-items-center gap-3 mt-2 pt-2 border-top border-secondary border-opacity-25" style="font-size:.78rem">
           <div class="d-flex align-items-center gap-1">
             <i class="bi bi-person text-muted"></i>
             <?php if ($tName): ?>
@@ -226,6 +243,7 @@ $allUsers = $allUsers ?? [];
           </div>
           <div class="d-flex align-items-center gap-1 flex-wrap">
             <i class="bi bi-bug text-muted"></i>
+            <?php if (!$rBugs): ?><span class="text-muted small">Kein Bug</span><?php endif; ?>
             <?php foreach ($rBugs as $bug): ?>
             <span class="badge bg-danger d-flex align-items-center gap-1">
               <?php if ($bug['jira_key'] && $bug['entry_id']): ?>
@@ -245,9 +263,9 @@ $allUsers = $allUsers ?? [];
             <?php endif; ?>
           </div>
           <div class="d-flex align-items-center gap-1 flex-wrap">
+            <i class="bi bi-link-45deg text-muted"></i>
             <?php if (!empty($r['pql_issue_key'])): ?>
             <span class="badge bg-dark border border-info text-info d-flex align-items-center gap-1">
-              <i class="bi bi-link-45deg"></i>
               <?php if ($jiraBase): ?>
               <a href="<?= e($jiraBase . '/browse/' . $r['pql_issue_key']) ?>" target="_blank" rel="noopener" class="text-info text-decoration-none"><?= e($r['pql_issue_key']) ?></a>
               <?php else: ?><?= e($r['pql_issue_key']) ?><?php endif; ?>
@@ -259,20 +277,14 @@ $allUsers = $allUsers ?? [];
             <button type="button" class="btn btn-outline-info btn-sm py-0 px-1" onclick="pqlSync(<?= $r['id'] ?>,'<?= e(Auth::csrfToken()) ?>')" title="PQL-Status aktualisieren"><i class="bi bi-arrow-repeat" style="font-size:.7rem"></i></button>
             <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1" onclick="pqlEdit(<?= $r['id'] ?>)" title="Verknüpfung ändern"><i class="bi bi-pencil" style="font-size:.65rem"></i></button>
             <?php endif; ?>
-            <?php elseif (Auth::canEdit('testing')): ?>
-            <button type="button" class="btn btn-outline-info btn-sm py-0 px-1" onclick="pqlEdit(<?= $r['id'] ?>)" title="PQL-Auftrag verknüpfen"><i class="bi bi-link-45deg" style="font-size:.7rem"></i> PQL</button>
+            <?php else: ?>
+            <span class="text-muted small">Kein PQL</span>
+            <?php if (Auth::canEdit('testing')): ?>
+            <button type="button" class="btn btn-outline-info btn-sm py-0 px-1" onclick="pqlEdit(<?= $r['id'] ?>)" title="PQL-Auftrag verknüpfen"><i class="bi bi-plus-lg" style="font-size:.7rem"></i></button>
+            <?php endif; ?>
             <?php endif; ?>
           </div>
         </div>
-        <div class="d-flex gap-1 flex-shrink-0">
-          <button class="btn btn-outline-info btn-sm py-0 px-2" data-bs-toggle="collapse" data-bs-target="#new-entry-<?= $r['id'] ?>" title="Create Test Entry">
-            <i class="bi bi-journal-plus"></i>
-          </button>
-          <button class="btn btn-outline-secondary btn-sm py-0 px-2" data-bs-toggle="collapse" data-bs-target="#result-<?= $r['id'] ?>">
-            <i class="bi bi-pencil"></i>
-          </button>
-        </div>
-      </div>
 
       <!-- Create entry collapse (full form) -->
       <div class="collapse mt-2" id="new-entry-<?= $r['id'] ?>">
@@ -971,7 +983,7 @@ function searchBugEntries(q) {
   clearTimeout(_bTimer);
   if (!q.trim()) { document.getElementById('bugEntryResults').innerHTML = ''; return; }
   _bTimer = setTimeout(() => {
-    fetch('<?= url("entries") ?>?q=' + encodeURIComponent(q) + '&json=1', {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+    fetch('<?= url("api/entries/search") ?>?q=' + encodeURIComponent(q), {headers: {'X-Requested-With': 'XMLHttpRequest'}})
     .then(r => r.json()).then(items => {
       if (!Array.isArray(items) || !items.length) {
         document.getElementById('bugEntryResults').innerHTML = '<div class="text-muted small py-1">Keine Eintraege.</div>';

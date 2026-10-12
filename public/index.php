@@ -395,7 +395,7 @@ $router->get('/api/entries/search', function() {
     if (strlen($q) < 2) { json([]); }
     $like = '%' . $q . '%';
     json(Database::fetchAll(
-        "SELECT id, title, entry_date FROM entries
+        "SELECT id, title, entry_date, jira_issue_key FROM entries
          WHERE (title LIKE ? OR mower_serial LIKE ?) AND id != ?
          ORDER BY entry_date DESC LIMIT 10",
         [$like, $like, $ex]

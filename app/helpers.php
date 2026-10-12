@@ -122,6 +122,27 @@ function e(mixed $value): string {
     return htmlspecialchars((string)($value ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+// -- Escapes free text for display, but any raw http(s) URL inside it becomes
+// a compact clickable link (showing just the hostname, not the whole path) -
+// a long pasted Confluence/SharePoint URL stays readable instead of wrapping
+// across several lines of a table/list row. --
+function linkifyUrls(string $text): string {
+    $parts = preg_split('/(https?:\/\/[^\s<>"\']+)/i', $text, -1, PREG_SPLIT_DELIM_CAPTURE);
+    if ($parts === false) return e($text);
+    $out = '';
+    foreach ($parts as $i => $part) {
+        if ($i % 2 === 1) {
+            $url  = rtrim($part, '.,;)');
+            $host = parse_url($url, PHP_URL_HOST) ?: $url;
+            $out .= '<a href="' . htmlspecialchars($url, ENT_QUOTES) . '" target="_blank" rel="noopener" class="text-decoration-none">'
+                  . '<i class="bi bi-box-arrow-up-right me-1"></i>' . e($host) . '</a>';
+        } else {
+            $out .= e($part);
+        }
+    }
+    return $out;
+}
+
 function json(mixed $data, int $code = 200): never {
     http_response_code($code);
     header('Content-Type: application/json; charset=utf-8');
