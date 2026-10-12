@@ -114,7 +114,7 @@ class TestCycleController
 
         // Failed results with notes and linked entries
         $failedResults = Database::fetchAll(
-            "SELECT trr.*, tpi.name test_name, tpi.description test_desc,
+            "SELECT trr.*, tpi.title test_name, tpi.description test_desc,
                     u.name tester_name,
                     GROUP_CONCAT(DISTINCT e.id ORDER BY e.id SEPARATOR ',')     entry_ids,
                     GROUP_CONCAT(DISTINCT e.title ORDER BY e.id SEPARATOR '||') entry_titles
@@ -132,12 +132,12 @@ class TestCycleController
 
         // Pending test cases
         $pendingResults = Database::fetchAll(
-            "SELECT trr.*, tpi.name test_name, tpi.description test_desc
+            "SELECT trr.*, tpi.title test_name, tpi.description test_desc
              FROM test_run_results trr
              JOIN test_runs tr ON tr.id = trr.test_run_id
              LEFT JOIN test_plan_items tpi ON tpi.id = trr.test_plan_item_id
              WHERE tr.test_cycle_id = ? AND trr.status = 'pending'
-             ORDER BY tpi.name",
+             ORDER BY tpi.title",
             [(int)$id]
         );
 

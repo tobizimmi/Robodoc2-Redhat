@@ -226,7 +226,7 @@ class ReportController
         );
 
         $runs = Database::fetchAll(
-            "SELECT tr.*, u.name tester_name,
+            "SELECT tr.*,
                     COUNT(trr.id) result_count,
                     SUM(trr.status='passed') passed, SUM(trr.status='failed') failed,
                     SUM(trr.status='pending') pending
@@ -237,7 +237,8 @@ class ReportController
         );
 
         $failed = Database::fetchAll(
-            "SELECT trr.*, tpi.name test_name, tpi.description test_desc,
+            "SELECT trr.*, tpi.title test_name, tpi.description test_desc,
+                    u.name tester_name,
                     GROUP_CONCAT(DISTINCT e.id ORDER BY e.id SEPARATOR ',') entry_ids,
                     GROUP_CONCAT(DISTINCT e.title ORDER BY e.id SEPARATOR '||') entry_titles
              FROM test_run_results trr
@@ -251,17 +252,17 @@ class ReportController
         );
 
         $pending = Database::fetchAll(
-            "SELECT trr.*, tpi.name test_name, tpi.description test_desc
+            "SELECT trr.*, tpi.title test_name, tpi.description test_desc
              FROM test_run_results trr
              JOIN test_runs tr ON tr.id = trr.test_run_id
              LEFT JOIN test_plan_items tpi ON tpi.id = trr.test_plan_item_id
              WHERE tr.test_cycle_id = ? AND trr.status = 'pending'
-             ORDER BY tpi.name", [$cycleId]
+             ORDER BY tpi.title", [$cycleId]
         );
 
         $linkedEntries = Database::fetchAll(
             "SELECT DISTINCT e.id, e.title, e.status, e.priority, p.name project_name,
-                    GROUP_CONCAT(DISTINCT tpi.name ORDER BY tpi.name SEPARATOR ', ') test_names,
+                    GROUP_CONCAT(DISTINCT tpi.title ORDER BY tpi.title SEPARATOR ', ') test_names,
                     GROUP_CONCAT(DISTINCT trr.status ORDER BY trr.status SEPARATOR ', ') test_statuses
              FROM entries e
              LEFT JOIN projects p ON p.id = e.project_id

@@ -20,6 +20,22 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          # uploads is ReadWriteOnce (ships attached to whichever single node the
+          # web Deployment's pod runs on). Without this, the scheduler can place
+          # the cron pod on a different node and the CSI driver refuses to attach
+          # the disk there too ("Multi-Attach error ... already used by pod(s)
+          # robodoc2-...") - the pod then sits in ContainerCreating until
+          # activeDeadlineSeconds kills it, forever, every single run. RWO allows
+          # multiple pods on the SAME node to share the volume, so forcing
+          # colocation with the web pod via podAffinity fixes it with no need to
+          # change the PVC's access mode or storage class.
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      app: robodoc2
+                  topologyKey: kubernetes.io/hostname
           containers:
             - name: robodoc2-cron
               image: image-registry.openshift-image-registry.svc:5000/YOUR-PROJECT/robodoc2:latest
