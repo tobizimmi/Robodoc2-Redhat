@@ -29,6 +29,8 @@ class TestRunController {
             'passed'  => count(array_filter($results, fn($r) => $r['status'] === 'passed')),
             'failed'  => count(array_filter($results, fn($r) => $r['status'] === 'failed')),
             'pending' => count(array_filter($results, fn($r) => $r['status'] === 'pending')),
+            'skipped' => count(array_filter($results, fn($r) => $r['status'] === 'skipped')),
+            'blocked' => count(array_filter($results, fn($r) => $r['status'] === 'blocked')),
         ];
         // Load test entries per result
         $resultIds = array_column($results, 'id');

@@ -43,13 +43,20 @@ $allUsers = $allUsers ?? [];
   <?php endforeach; ?>
 </div>
 
-<!-- Progress bar -->
+<!-- Progress bar: every status gets its own segment so "Pending" (currently
+     running) is visible, not lumped in with "done" or hidden - only "New"
+     (not started yet) is left as plain background, uncounted. -->
 <div class="mb-4">
   <div class="d-flex justify-content-between mb-1 small text-muted">
-    <span>Fortschritt</span><span><?= $pct ?>%</span>
+    <span>Fortschritt</span><span><?= $pct ?>% bestanden<?= $stats['pending'] ? ' · ' . $stats['pending'] . ' laufen' : '' ?></span>
   </div>
   <div class="progress" style="height:12px">
-    <div class="progress-bar bg-success" style="width:<?= $pct ?>%"></div>
+    <?php foreach (['passed'=>'bg-success','failed'=>'bg-danger','pending'=>'bg-warning','skipped'=>'bg-info','blocked'=>'bg-dark'] as $st => $cls): ?>
+    <?php $w = $stats['total'] ? round($stats[$st] / $stats['total'] * 100) : 0; ?>
+    <?php if ($w > 0): ?>
+    <div class="progress-bar <?= $cls ?>" style="width:<?= $w ?>%" title="<?= e(ucfirst($st)) ?>: <?= $stats[$st] ?>"></div>
+    <?php endif; ?>
+    <?php endforeach; ?>
   </div>
 </div>
 

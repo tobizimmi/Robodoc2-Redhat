@@ -50,7 +50,7 @@ class TestPlanController {
         $runsByCycle = [];
         if ($cycleIds) {
             $ph = implode(',', array_fill(0, count($cycleIds), '?'));
-            foreach (Database::fetchAll("SELECT tr.*, COUNT(trr.id) rc, SUM(trr.status='passed') p, SUM(trr.status='failed') f FROM test_runs tr LEFT JOIN test_run_results trr ON trr.test_run_id=tr.id WHERE tr.test_cycle_id IN ($ph) GROUP BY tr.id ORDER BY tr.created_at DESC", $cycleIds) as $cr) {
+            foreach (Database::fetchAll("SELECT tr.*, COUNT(trr.id) rc, SUM(trr.status='passed') p, SUM(trr.status='failed') f, SUM(trr.status='pending') pe FROM test_runs tr LEFT JOIN test_run_results trr ON trr.test_run_id=tr.id WHERE tr.test_cycle_id IN ($ph) GROUP BY tr.id ORDER BY tr.created_at DESC", $cycleIds) as $cr) {
                 $runsByCycle[$cr['test_cycle_id']][] = $cr;
             }
         }

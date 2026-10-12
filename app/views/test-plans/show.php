@@ -9,9 +9,9 @@ $categories = $categories ?? [];
 $categoriesById = array_column($categories, null, 'id');
 
 // Overall progress across all cycles
-$totR = 0; $totP = 0; $totF = 0;
+$totR = 0; $totP = 0; $totF = 0; $totPe = 0;
 foreach ($runsByCycle as $crs) {
-    foreach ($crs as $cr) { $totR += (int)$cr['rc']; $totP += (int)$cr['p']; $totF += (int)$cr['f']; }
+    foreach ($crs as $cr) { $totR += (int)$cr['rc']; $totP += (int)$cr['p']; $totF += (int)$cr['f']; $totPe += (int)($cr['pe'] ?? 0); }
 }
 $totPct = $totR > 0 ? round($totP/$totR*100) : 0;
 ?>
@@ -55,12 +55,18 @@ $totPct = $totR > 0 ? round($totP/$totR*100) : 0;
         <div class="progress" style="height:8px">
           <div class="progress-bar bg-success" style="width:<?= $totPct ?>%"></div>
           <div class="progress-bar bg-danger"  style="width:<?= $totR>0?round($totF/$totR*100):0 ?>%"></div>
+          <?php if ($totPe): ?>
+          <div class="progress-bar bg-warning" style="width:<?= round($totPe/$totR*100) ?>%" title="Laufen: <?= $totPe ?>"></div>
+          <?php endif; ?>
         </div>
       </div>
       <div class="d-flex gap-3 flex-shrink-0 text-center" style="font-size:.75rem">
         <div><div class="fw-bold text-success"><?= $totP ?></div><div class="text-muted">ok</div></div>
         <div><div class="fw-bold text-danger"><?= $totF ?></div><div class="text-muted">fail</div></div>
-        <div><div class="fw-bold text-muted"><?= $totR-$totP-$totF ?></div><div class="text-muted">offen</div></div>
+        <?php if ($totPe): ?>
+        <div><div class="fw-bold text-warning"><?= $totPe ?></div><div class="text-muted">laufen</div></div>
+        <?php endif; ?>
+        <div><div class="fw-bold text-muted"><?= $totR-$totP-$totF-$totPe ?></div><div class="text-muted">offen</div></div>
       </div>
     </div>
   </div>
