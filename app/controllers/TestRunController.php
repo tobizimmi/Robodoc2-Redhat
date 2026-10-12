@@ -75,6 +75,28 @@ class TestRunController {
             [$run['test_plan_id'], (int)$id]
         );
 
+        // Bugs linked/created per result (Bug modal) - was being inserted into
+        // test_run_bugs correctly but never queried back here, so the badge in
+        // the result row's footer toolbar always rendered empty.
+        $bugsByResult = [];
+        if ($resultIds) {
+            $ph3 = implode(',', array_fill(0, count($resultIds), '?'));
+            $bugRows = Database::fetchAll(
+                "SELECT trb.*, e.title entry_title
+                 FROM test_run_bugs trb
+                 LEFT JOIN entries e ON e.id = trb.entry_id
+                 WHERE trb.test_run_result_id IN ($ph3)
+                 ORDER BY trb.created_at",
+                $resultIds
+            );
+            foreach ($bugRows as $br) {
+                $bugsByResult[$br['test_run_result_id']][] = $br;
+            }
+        }
+        // Same gap for tester assignment - assigned_tester was saved but never
+        // resolved back to a name because $allUsers was never loaded.
+        $allUsers = Database::fetchAll('SELECT id, name FROM users ORDER BY name');
+
         $testAreas    = Database::fetchAll('SELECT id, name FROM test_areas ORDER BY name');
         $environments = Database::fetchAll('SELECT id, name FROM test_environments ORDER BY name');
         $entryTypes   = Database::fetchAll('SELECT * FROM entry_types ORDER BY sort_order, name');
@@ -86,7 +108,7 @@ class TestRunController {
             ? Database::fetchAll('SELECT id, name, serial_number, firmware_version FROM inventory_items WHERE project_id=? ORDER BY name', [$runProjectId])
             : Database::fetchAll('SELECT id, name, serial_number, firmware_version FROM inventory_items ORDER BY name');
         $activeSession = class_exists('TestSessionController') ? TestSessionController::getActive() : null;
-        View::render('test-runs/show', compact('run', 'results', 'stats', 'testEntries', 'testEntryAttachments', 'missingItems', 'testAreas', 'environments', 'entryTypes', 'categories', 'customFields', 'inventoryMowers', 'activeSession') + ['title' => $run['name']]);
+        View::render('test-runs/show', compact('run', 'results', 'stats', 'testEntries', 'testEntryAttachments', 'missingItems', 'bugsByResult', 'allUsers', 'testAreas', 'environments', 'entryTypes', 'categories', 'customFields', 'inventoryMowers', 'activeSession') + ['title' => $run['name']]);
     }
 
     public static function create(): void {
