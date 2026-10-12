@@ -253,12 +253,11 @@ document.addEventListener('DOMContentLoaded', function() {
     <?php endif; ?>
     <div class="mt-2">
       <?php
-      $teParams = array_merge($_GET, ['show_test_entries' => $showTestEntries ? '' : '1']);
-      if (!$showTestEntries) unset($teParams['show_test_entries']);
-      else $teParams['show_test_entries'] = '1';
-      $teUrl = url('entries?' . http_build_query(array_filter($teParams, fn($v) => $v !== '')));
+      // Always send an explicit 0/1 (never just unset the param) so the
+      // controller's per-viewMode default can't silently override a click.
+      $teParams = array_merge($_GET, ['show_test_entries' => $showTestEntries ? '0' : '1']);
       ?>
-      <a href="<?= $showTestEntries ? url('entries?' . http_build_query(array_diff_key($_GET, ['show_test_entries'=>'']))) : url('entries?' . http_build_query(array_merge($_GET, ['show_test_entries'=>'1']))) ?>" class="btn btn-sm <?= $showTestEntries ? 'btn-info' : 'btn-outline-secondary' ?>">
+      <a href="<?= $baseUrl ?>?<?= http_build_query($teParams) ?>" class="btn btn-sm <?= $showTestEntries ? 'btn-info' : 'btn-outline-secondary' ?>">
         <i class="bi bi-clipboard-check me-1"></i><?= $showTestEntries ? 'Hide Test Entries' : 'Show Test Entries' ?>
       </a>
       <a href="<?= $showKeyQuestions ? url('entries?' . http_build_query(array_diff_key($_GET, ['show_key_questions'=>'']))) : url('entries?' . http_build_query(array_merge($_GET, ['show_key_questions'=>'1']))) ?>" class="btn btn-sm <?= $showKeyQuestions ? 'btn-warning' : 'btn-outline-secondary' ?>">

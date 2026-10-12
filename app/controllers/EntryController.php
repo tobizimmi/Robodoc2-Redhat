@@ -51,7 +51,12 @@ class EntryController {
         $sortExpr  = $sortMap[$sortBy];
         $sortDir   = strtoupper($_GET['dir'] ?? 'DESC') === 'ASC' ? 'ASC' : 'DESC';
 
-        $showTestEntries    = !empty($_GET['show_test_entries']);
+        // Test Entries are hidden by default everywhere except the Test
+        // Results list, whose whole purpose is to show them. An explicit
+        // show_test_entries=0/1 in the URL always overrides that default.
+        $showTestEntries    = isset($_GET['show_test_entries']) && $_GET['show_test_entries'] !== ''
+            ? $_GET['show_test_entries'] !== '0'
+            : ($viewMode === 'test-results');
         $showKeyQuestions   = !empty($_GET['show_key_questions']);
 
         $where  = ['1=1'];
