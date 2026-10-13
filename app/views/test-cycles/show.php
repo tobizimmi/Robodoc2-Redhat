@@ -34,17 +34,17 @@ $pct       = $total > 0 ? round($passed / $total * 100) : 0;
   <div class="col-md-4">
     <div class="card border-secondary h-100">
       <div class="card-header border-secondary fw-semibold">
-        <i class="bi bi-pie-chart me-2"></i>Test-Übersicht
+        <i class="bi bi-pie-chart me-2"></i>Test Overview
       </div>
       <div class="card-body d-flex flex-column align-items-center justify-content-center">
         <?php if ($total > 0): ?>
         <canvas id="testPieChart" width="200" height="200"></canvas>
         <div class="mt-2 text-center">
           <div class="fw-bold fs-4"><?= $pct ?>%</div>
-          <div class="text-muted small">bestanden</div>
+          <div class="text-muted small">passed</div>
         </div>
         <?php else: ?>
-        <p class="text-muted small">Noch keine Testergebnisse</p>
+        <p class="text-muted small">No test results yet</p>
         <?php endif; ?>
       </div>
     </div>
@@ -55,13 +55,13 @@ $pct       = $total > 0 ? round($passed / $total * 100) : 0;
     <div class="row g-2 h-100">
       <?php
       $statCards = [
-        ['label'=>'Gesamt',    'value'=>$total,   'color'=>'secondary', 'icon'=>'list-check'],
-        ['label'=>'Neu',       'value'=>$new,     'color'=>'primary',   'icon'=>'circle'],
-        ['label'=>'Bestanden', 'value'=>$passed,  'color'=>'success',   'icon'=>'check-circle-fill'],
-        ['label'=>'Fehlgeschl.','value'=>$failed, 'color'=>'danger',    'icon'=>'x-circle-fill'],
-        ['label'=>'Ausstehend','value'=>$pending, 'color'=>'warning',   'icon'=>'clock'],
-        ['label'=>'Übersprungen','value'=>$skipped,'color'=>'info',     'icon'=>'skip-forward'],
-        ['label'=>'Blockiert', 'value'=>$blocked, 'color'=>'dark',      'icon'=>'slash-circle'],
+        ['label'=>'Total',    'value'=>$total,   'color'=>'secondary', 'icon'=>'list-check'],
+        ['label'=>'New',       'value'=>$new,     'color'=>'primary',   'icon'=>'circle'],
+        ['label'=>'Passed', 'value'=>$passed,  'color'=>'success',   'icon'=>'check-circle-fill'],
+        ['label'=>'Failed','value'=>$failed, 'color'=>'danger',    'icon'=>'x-circle-fill'],
+        ['label'=>'Pending','value'=>$pending, 'color'=>'warning',   'icon'=>'clock'],
+        ['label'=>'Skipped','value'=>$skipped,'color'=>'info',     'icon'=>'skip-forward'],
+        ['label'=>'Blocked', 'value'=>$blocked, 'color'=>'dark',      'icon'=>'slash-circle'],
       ];
       ?>
       <?php foreach ($statCards as $sc2): ?>
@@ -87,7 +87,7 @@ $pct       = $total > 0 ? round($passed / $total * 100) : 0;
   </div>
   <div class="card-body p-0">
     <?php if (!$runs): ?>
-    <p class="text-muted small p-3">Noch keine Test Runs in diesem Cycle.</p>
+    <p class="text-muted small p-3">No test runs in this cycle yet.</p>
     <?php else: ?>
     <div class="table-responsive">
       <table class="table table-sm table-dark table-hover mb-0">
@@ -98,7 +98,7 @@ $pct       = $total > 0 ? round($passed / $total * 100) : 0;
             <th class="text-danger">✗</th>
             <th class="text-warning">⏳</th>
             <th class="text-info">↷</th>
-            <th>Fortschritt</th>
+            <th>Progress</th>
           </tr>
         </thead>
         <tbody>
@@ -138,12 +138,12 @@ $pct       = $total > 0 ? round($passed / $total * 100) : 0;
   </div>
 </div>
 
-<!-- ── FEHLGESCHLAGENE TESTS ──────────────────────────────────────── -->
+<!-- ── FAILED TESTS ──────────────────────────────────────── -->
 <?php if ($failedResults): ?>
 <div class="card border-danger mb-4">
   <div class="card-header border-danger d-flex align-items-center justify-content-between">
     <span class="fw-semibold text-danger">
-      <i class="bi bi-x-circle me-2"></i>Fehlgeschlagene Tests (<?= count($failedResults) ?>)
+      <i class="bi bi-x-circle me-2"></i>Failed Tests (<?= count($failedResults) ?>)
     </span>
   </div>
   <div class="card-body p-0">
@@ -166,7 +166,7 @@ $pct       = $total > 0 ? round($passed / $total * 100) : 0;
           <?php endif; ?>
           <?php if ($entryIds): ?>
           <div class="mt-2 d-flex flex-wrap gap-1">
-            <span class="text-muted small me-1"><i class="bi bi-link me-1"></i>Verknüpfte Einträge:</span>
+            <span class="text-muted small me-1"><i class="bi bi-link me-1"></i>Linked Entries:</span>
             <?php foreach ($entryIds as $i => $eid): ?>
             <a href="<?= url('entries/'.$eid) ?>" target="_blank"
                class="badge bg-secondary text-decoration-none">
@@ -189,18 +189,18 @@ $pct       = $total > 0 ? round($passed / $total * 100) : 0;
 </div>
 <?php endif; ?>
 
-<!-- ── OFFENE TESTS ───────────────────────────────────────────────── -->
+<!-- ── OPEN TESTS ───────────────────────────────────────────────── -->
 <?php if ($pendingResults): ?>
 <div class="card border-warning mb-4">
   <div class="card-header border-warning d-flex align-items-center justify-content-between">
     <span class="fw-semibold">
-      <i class="bi bi-clock me-2 text-warning"></i>Offene Tests (<?= count($pendingResults) ?>)
+      <i class="bi bi-clock me-2 text-warning"></i>Open Tests (<?= count($pendingResults) ?>)
     </span>
   </div>
   <div class="card-body p-0">
     <div class="table-responsive">
       <table class="table table-sm table-dark mb-0">
-        <thead><tr><th>Test Case</th><th>Beschreibung</th></tr></thead>
+        <thead><tr><th>Test Case</th><th>Description</th></tr></thead>
         <tbody>
           <?php foreach ($pendingResults as $r): ?>
           <tr>
@@ -225,7 +225,7 @@ document.addEventListener('DOMContentLoaded', function() {
   new Chart(ctx, {
     type: 'doughnut',
     data: {
-      labels: ['Bestanden', 'Fehlgeschlagen', 'Ausstehend', 'Übersprungen', 'Blockiert', 'Neu'],
+      labels: ['Passed', 'Failed', 'Pending', 'Skipped', 'Blocked', 'New'],
       datasets: [{
         data: [<?= $passed ?>, <?= $failed ?>, <?= $pending ?>, <?= $skipped ?>, <?= $blocked ?>, <?= $new ?>],
         backgroundColor: ['#10b981','#ef4444','#f59e0b','#3b82f6','#6b7280','#818cf8'],

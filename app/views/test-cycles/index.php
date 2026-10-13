@@ -15,7 +15,7 @@ $canEdit = Auth::canEdit('testing');
 <?php if (!$plans): ?>
 <div class="text-center text-muted py-5">
   <i class="bi bi-arrow-repeat fs-1 d-block mb-2 opacity-25"></i>
-  Noch keine Test Planes. <a href="<?= url('test-plans/create') ?>">Ersten Plan erstellen</a>
+  No test plans yet. <a href="<?= url('test-plans/create') ?>">Create first plan</a>
 </div>
 <?php else: ?>
 
@@ -50,7 +50,7 @@ $canEdit = Auth::canEdit('testing');
     <?php endif; ?>
     <?php if ($canEdit): ?>
     <a href="<?= url('test-runs/create?plan_id='.$plan['id']) ?>" class="btn btn-outline-success btn-sm py-0">
-      <i class="bi bi-plus-lg me-1"></i>Neuer Cycle
+      <i class="bi bi-plus-lg me-1"></i>New Cycle
     </a>
     <?php endif; ?>
   </div>
@@ -83,7 +83,7 @@ $canEdit = Auth::canEdit('testing');
       <div class="d-flex align-items-center gap-2 flex-shrink-0" style="font-size:.75rem">
         <span class="text-success"><?= $cP ?> ok</span>
         <span class="text-danger"><?= $cF ?> fail</span>
-        <span class="text-muted"><?= $cR-$cP-$cF ?> offen</span>
+        <span class="text-muted"><?= $cR-$cP-$cF ?> open</span>
         <div style="width:80px">
           <div class="progress" style="height:5px">
             <div class="progress-bar bg-success" style="width:<?= $cPct ?>%"></div>
@@ -97,16 +97,16 @@ $canEdit = Auth::canEdit('testing');
       <div class="d-flex gap-1 flex-shrink-0">
         <?php if ($canEdit): ?>
         <a href="<?= url('test-runs/create?plan_id='.$plan['id'].'&cycle_id='.$cyc['id']) ?>"
-           class="btn btn-primary btn-sm py-0 px-2" title="Neuer Test Run">
+           class="btn btn-primary btn-sm py-0 px-2" title="New Test Run">
           <i class="bi bi-play-fill"></i>
         </a>
         <a href="<?= url('test-cycles/'.$cyc['id'].'/edit') ?>"
-           class="btn btn-outline-secondary btn-sm py-0 px-2" title="Bearbeiten">
+           class="btn btn-outline-secondary btn-sm py-0 px-2" title="Edit">
           <i class="bi bi-pencil" style="font-size:.75rem"></i>
         </a>
         <?php endif; ?>
         <a href="<?= url('test-cycles/'.$cyc['id']) ?>"
-           class="btn btn-outline-secondary btn-sm py-0 px-2" title="Oeffnen">
+           class="btn btn-outline-secondary btn-sm py-0 px-2" title="Open">
           <i class="bi bi-chevron-right" style="font-size:.75rem"></i>
         </a>
       </div>
@@ -141,9 +141,9 @@ $canEdit = Auth::canEdit('testing');
     </div>
     <?php else: ?>
     <div class="px-4 py-1 text-muted small border-top border-secondary">
-      Noch keine Test Runs.
+      No test runs yet.
       <?php if ($canEdit): ?>
-      <a href="<?= url('test-runs/create?plan_id='.$plan['id'].'&cycle_id='.$cyc['id']) ?>">Jetzt starten</a>
+      <a href="<?= url('test-runs/create?plan_id='.$plan['id'].'&cycle_id='.$cyc['id']) ?>">Start now</a>
       <?php endif; ?>
     </div>
     <?php endif; ?>
@@ -152,8 +152,8 @@ $canEdit = Auth::canEdit('testing');
 
   <?php if (!$cycles && $canEdit): ?>
   <div class="card-body text-muted small text-center py-3">
-    Noch keine Cycles.
-    <a href="<?= url('test-plans/'.$plan['id']) ?>">Im Test Plan erstellen</a>
+    No cycles yet.
+    <a href="<?= url('test-plans/'.$plan['id']) ?>">Create in Test Plan</a>
   </div>
   <?php endif; ?>
 </div>
@@ -163,14 +163,14 @@ $canEdit = Auth::canEdit('testing');
 <?php if ($legacyRuns): ?>
 <div class="card mt-2">
   <div class="card-header border-secondary d-flex align-items-center gap-2">
-    <span class="fw-semibold small text-muted"><i class="bi bi-archive me-1"></i>Test Runs ohne Cycle</span>
+    <span class="fw-semibold small text-muted"><i class="bi bi-archive me-1"></i>Test Runs without Cycle</span>
     <span class="badge bg-secondary"><?= count($legacyRuns) ?></span>
-    <span class="text-muted small ms-2">Diese Runs wurden vor der Cycle-Einfuehrung erstellt.</span>
+    <span class="text-muted small ms-2">These runs were created before cycles were introduced.</span>
   </div>
   <div class="table-responsive">
     <table class="table table-dark table-hover align-middle mb-0" style="font-size:.82rem">
       <thead class="text-muted" style="font-size:.72rem">
-        <tr><th>Name</th><th>Plan</th><th>Status</th><th>Ergebnisse</th><th>Cycle zuweisen</th><th></th></tr>
+        <tr><th>Name</th><th>Plan</th><th>Status</th><th>Results</th><th>Assign Cycle</th><th></th></tr>
       </thead>
       <tbody>
         <?php foreach ($legacyRuns as $r):
@@ -189,7 +189,7 @@ $canEdit = Auth::canEdit('testing');
           <td>
             <div class="d-flex gap-1 align-items-center">
               <select class="form-select form-select-sm" id="cyc-sel-<?= $r['id'] ?>" style="max-width:180px">
-                <option value="">-- kein Cycle --</option>
+                <option value="">-- no cycle --</option>
                 <?php
                   $runPlan = Database::fetchOne('SELECT id FROM test_plans WHERE id=?', [$r['test_plan_id'] ?? 0]);
                   $availCycles = $runPlan
@@ -202,7 +202,7 @@ $canEdit = Auth::canEdit('testing');
               </select>
               <button class="btn btn-outline-success btn-sm py-0 px-2"
                       onclick="assignCycle(<?= $r['id'] ?>,'<?= e($csrf) ?>')"
-                      title="Zuweisen">
+                      title="Assign">
                 <i class="bi bi-check-lg"></i>
               </button>
             </div>
@@ -232,9 +232,9 @@ function assignCycle(runId, csrf) {
   .then(d => {
     if (d.success) {
       if (typeof showToast === 'function')
-        showToast(cycleId ? ('Dem Cycle "' + d.cycle_name + '" zugewiesen.') : 'Cycle-Zuweisung entfernt.', 'success');
+        showToast(cycleId ? ('Assigned to cycle "' + d.cycle_name + '".') : 'Cycle assignment removed.', 'success');
       setTimeout(() => location.reload(), 1000);
-    } else alert(d.error || 'Fehler');
+    } else alert(d.error || 'Error');
   });
 }
 </script>

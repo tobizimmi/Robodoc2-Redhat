@@ -12,14 +12,14 @@ class TestCycleController
         $description = trim($_POST['description'] ?? '');
         $environment = trim($_POST['environment'] ?? '');
         $build       = trim($_POST['build'] ?? '');
-        if (!$name) { flash('error', 'Name erforderlich.'); redirect('/test-plans/' . $planId); }
+        if (!$name) { flash('error', 'Name required.'); redirect('/test-plans/' . $planId); }
         $plan = Database::fetchOne('SELECT id FROM test_plans WHERE id=?', [(int)$planId]);
         if (!$plan) abort(404);
         $cycleId = Database::insert(
             'INSERT INTO test_cycles (test_plan_id, name, description, environment, build, status, created_by) VALUES (?,?,?,?,?,?,?)',
             [(int)$planId, $name, $description, $environment, $build, 'planned', Auth::id()]
         );
-        flash('success', 'Test Cycle erstellt.');
+        flash('success', 'Test Cycle created.');
         redirect('/test-plans/' . $planId . '#cycle-' . $cycleId);
     }
 
@@ -30,7 +30,7 @@ class TestCycleController
         $cycle = Database::fetchOne('SELECT * FROM test_cycles WHERE id=?', [(int)$id]);
         if (!$cycle) abort(404);
         Database::execute('DELETE FROM test_cycles WHERE id=?', [(int)$id]);
-        flash('success', 'Test Cycle geloescht.');
+        flash('success', 'Test Cycle deleted.');
         redirect('/test-plans/' . $cycle['test_plan_id']);
     }
 
@@ -162,10 +162,10 @@ class TestCycleController
             Auth::verifyCsrf();
             Database::execute('UPDATE test_cycles SET name=?, description=?, environment=?, build=?, status=? WHERE id=?',
                 [trim($_POST['name']??''), trim($_POST['description']??''), trim($_POST['environment']??''), trim($_POST['build']??''), $_POST['status']??'planned', (int)$id]);
-            flash('success', 'Test Cycle aktualisiert.');
+            flash('success', 'Test Cycle updated.');
             redirect('/test-cycles/' . $id);
         }
-        View::render('test-cycles/edit', compact('cycle') + ['title' => 'Cycle bearbeiten']);
+        View::render('test-cycles/edit', compact('cycle') + ['title' => 'Edit Cycle']);
     }
 
     public static function assignCycle(string $id): void
