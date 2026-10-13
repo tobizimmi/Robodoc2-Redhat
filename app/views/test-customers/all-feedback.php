@@ -1,10 +1,10 @@
 <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
   <div>
     <a href="<?= url('test-customers') ?>" class="text-muted small">
-      <i class="bi bi-arrow-left me-1"></i>Aufträge
+      <i class="bi bi-arrow-left me-1"></i>Orders
     </a>
     <h5 class="mt-1 mb-0">
-      <i class="bi bi-chat-left-text me-2 text-info"></i>Gesamtes Feedback
+      <i class="bi bi-chat-left-text me-2 text-info"></i>All Feedback
       <span class="badge bg-secondary ms-2"><?= number_format($total) ?></span>
     </h5>
   </div>
@@ -14,9 +14,9 @@
 <form method="GET" action="<?= url('test-customers/feedback') ?>" class="card border-secondary p-3 mb-4">
   <div class="row g-2 align-items-end">
     <div class="col-md-3">
-      <label class="form-label small mb-1 text-muted">Testauftrag</label>
+      <label class="form-label small mb-1 text-muted">Test Order</label>
       <select name="order_id" class="form-select form-select-sm">
-        <option value="">Alle Aufträge</option>
+        <option value="">All Orders</option>
         <?php foreach ($orders as $o): ?>
         <option value="<?= $o['id'] ?>" <?= $fOrder == $o['id'] ? 'selected' : '' ?>>
           <?= e($o['title']) ?>
@@ -25,9 +25,9 @@
       </select>
     </div>
     <div class="col-md-3">
-      <label class="form-label small mb-1 text-muted">Testkunde</label>
+      <label class="form-label small mb-1 text-muted">Test Customer</label>
       <select name="customer_id" class="form-select form-select-sm">
-        <option value="">Alle Testkunden</option>
+        <option value="">All Test Customers</option>
         <?php foreach ($customers as $tc): ?>
         <option value="<?= $tc['id'] ?>" <?= $fCustomer == $tc['id'] ? 'selected' : '' ?>>
           <?= e($tc['customer_number']) ?> &ndash; <?= e($tc['label']) ?>
@@ -38,16 +38,16 @@
     <div class="col-md-2">
       <label class="form-label small mb-1 text-muted">Status</label>
       <select name="status" class="form-select form-select-sm">
-        <option value="">Alle</option>
-        <option value="pending"  <?= $fStatus === 'pending'  ? 'selected' : '' ?>>Neu</option>
-        <option value="reviewed" <?= $fStatus === 'reviewed' ? 'selected' : '' ?>>Gesehen</option>
-        <option value="imported" <?= $fStatus === 'imported' ? 'selected' : '' ?>>Importiert</option>
+        <option value="">All</option>
+        <option value="pending"  <?= $fStatus === 'pending'  ? 'selected' : '' ?>>New</option>
+        <option value="reviewed" <?= $fStatus === 'reviewed' ? 'selected' : '' ?>>Reviewed</option>
+        <option value="imported" <?= $fStatus === 'imported' ? 'selected' : '' ?>>Imported</option>
       </select>
     </div>
     <div class="col-md-3">
-      <label class="form-label small mb-1 text-muted">Suche</label>
+      <label class="form-label small mb-1 text-muted">Search</label>
       <input type="text" name="search" class="form-control form-control-sm"
-             placeholder="Titel oder Beschreibung..." value="<?= e($fSearch) ?>">
+             placeholder="Title or description..." value="<?= e($fSearch) ?>">
     </div>
     <div class="col-auto d-flex gap-1">
       <button type="submit" class="btn btn-primary btn-sm px-3">
@@ -65,7 +65,7 @@
 <?php if (empty($feedback)): ?>
 <div class="text-center text-muted py-5">
   <i class="bi bi-inbox" style="font-size:3rem;opacity:.2"></i>
-  <p class="mt-3">Kein Feedback gefunden.</p>
+  <p class="mt-3">No feedback found.</p>
 </div>
 <?php else: ?>
 
@@ -84,11 +84,11 @@
       <!-- Status indicator -->
       <div class="col-auto">
         <?php if ($isPending): ?>
-          <span class="badge bg-warning text-dark">NEU</span>
+          <span class="badge bg-warning text-dark">NEW</span>
         <?php elseif ($isImported): ?>
-          <span class="badge bg-success">Importiert</span>
+          <span class="badge bg-success">Imported</span>
         <?php else: ?>
-          <span class="badge bg-secondary">Gesehen</span>
+          <span class="badge bg-secondary">Reviewed</span>
         <?php endif; ?>
       </div>
 
@@ -107,7 +107,7 @@
 
       <!-- Meta info -->
       <div class="col-md-3">
-        <!-- Auftrag -->
+        <!-- Order -->
         <div class="d-flex align-items-center gap-1 mb-1">
           <?php if ($fb['project_color']): ?>
           <span class="badge" style="background:<?= e($fb['project_color']) ?>;font-size:.6rem">
@@ -119,7 +119,7 @@
             <?= e(mb_substr($fb['order_title'], 0, 30)) ?>
           </a>
         </div>
-        <!-- Testkunde -->
+        <!-- Test Customer -->
         <?php if ($customerLabel): ?>
         <div class="small">
           <i class="bi bi-person-badge text-warning me-1"></i>

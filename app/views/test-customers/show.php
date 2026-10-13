@@ -5,7 +5,7 @@ $csrf = Auth::csrfToken();
 
 <div class="d-flex align-items-start gap-3 mb-4 flex-wrap">
   <div class="flex-grow-1">
-    <a href="<?= url('test-customers') ?>" class="text-muted small"><i class="bi bi-arrow-left me-1"></i>Alle Aufträge</a>
+    <a href="<?= url('test-customers') ?>" class="text-muted small"><i class="bi bi-arrow-left me-1"></i>All Orders</a>
     <h5 class="mt-1 mb-0"><?= e($order['title']) ?></h5>
     <div class="d-flex align-items-center gap-2 mt-1">
       <span class="badge" style="background:<?= e($order['project_color'] ?? '#666') ?>"><?= e($order['project_name']) ?></span>
@@ -18,19 +18,19 @@ $csrf = Auth::csrfToken();
       <i class="bi bi-qr-code me-1"></i>QR Feedback
     </a>
     <a href="<?= e($feedbackUrl) ?>" target="_blank" class="btn btn-outline-secondary btn-sm">
-      <i class="bi bi-box-arrow-up-right me-1"></i>Feedback öffnen
+      <i class="bi bi-box-arrow-up-right me-1"></i>Open Feedback
     </a>
-    <button class="btn btn-outline-secondary btn-sm" onclick="navigator.clipboard.writeText(window.location.origin + '<?= e($feedbackUrl) ?>');this.textContent='Kopiert!'">
-      <i class="bi bi-clipboard me-1"></i>Link kopieren
+    <button class="btn btn-outline-secondary btn-sm" onclick="navigator.clipboard.writeText(window.location.origin + '<?= e($feedbackUrl) ?>');this.textContent='Copied!'">
+      <i class="bi bi-clipboard me-1"></i>Copy Link
     </button>
     <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#editOrderModal">
-      <i class="bi bi-pencil me-1"></i>Bearbeiten
+      <i class="bi bi-pencil me-1"></i>Edit
     </button>
     <form method="POST" action="<?= url('test-customers/' . $order['id'] . '/delete') ?>"
-          onsubmit="return confirm('Auftrag und alle Daten löschen?')" class="d-inline">
+          onsubmit="return confirm('Delete order and all data?')" class="d-inline">
       <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
       <button type="submit" class="btn btn-outline-danger btn-sm">
-        <i class="bi bi-trash me-1"></i>Löschen
+        <i class="bi bi-trash me-1"></i>Delete
       </button>
     </form>
   </div>
@@ -44,18 +44,18 @@ $csrf = Auth::csrfToken();
   <!-- LEFT: Feedback -->
   <div class="col-lg-6">
     <div class="d-flex align-items-center justify-content-between mb-3">
-      <h6 class="mb-0"><i class="bi bi-chat-left-text me-2 text-info"></i>Kunden Feedback
+      <h6 class="mb-0"><i class="bi bi-chat-left-text me-2 text-info"></i>Customer Feedback
         <?php $pending = array_filter($feedback, fn($f) => $f['status'] === 'pending'); ?>
         <?php if ($pending): ?>
-        <span class="badge bg-warning text-dark ms-2"><?= count($pending) ?> neu</span>
+        <span class="badge bg-warning text-dark ms-2"><?= count($pending) ?> new</span>
         <?php endif; ?>
       </h6>
-      <small class="text-muted"><?= count($feedback) ?> gesamt</small>
+      <small class="text-muted"><?= count($feedback) ?> total</small>
     </div>
 
     <?php if (empty($feedback)): ?>
     <div class="text-muted small text-center py-4 border border-secondary rounded">
-      Noch kein Feedback. Teile den QR-Code oder Link mit den Kunden.
+      No feedback yet. Share the QR code or link with customers.
     </div>
     <?php else: ?>
     <div class="d-flex flex-column gap-2" style="max-height:600px;overflow-y:auto">
@@ -86,21 +86,21 @@ $csrf = Auth::csrfToken();
             </div>
             <div class="d-flex flex-column gap-1 flex-shrink-0">
               <?php if ($fb['entry_id']): ?>
-              <a href="<?= url('entries/' . $fb['entry_id']) ?>" class="btn btn-outline-success btn-sm py-0 px-1" title="Zu Entry">
+              <a href="<?= url('entries/' . $fb['entry_id']) ?>" class="btn btn-outline-success btn-sm py-0 px-1" title="To entry">
                 <i class="bi bi-box-arrow-up-right" style="font-size:.7rem"></i>
               </a>
               <?php elseif ($fb['status'] !== 'imported'): ?>
               <form method="POST" action="<?= url('test-customers/' . $order['id'] . '/feedback/' . $fb['id'] . '/review') ?>">
                 <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
                 <input type="hidden" name="action" value="import">
-                <button class="btn btn-outline-primary btn-sm py-0 px-1" title="Als Entry importieren">
+                <button class="btn btn-outline-primary btn-sm py-0 px-1" title="Import as entry">
                   <i class="bi bi-download" style="font-size:.7rem"></i>
                 </button>
               </form>
               <form method="POST" action="<?= url('test-customers/' . $order['id'] . '/feedback/' . $fb['id'] . '/review') ?>">
                 <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
                 <input type="hidden" name="action" value="review">
-                <button class="btn btn-outline-secondary btn-sm py-0 px-1" title="Als gesehen markieren">
+                <button class="btn btn-outline-secondary btn-sm py-0 px-1" title="Mark as reviewed">
                   <i class="bi bi-check" style="font-size:.7rem"></i>
                 </button>
               </form>
@@ -110,7 +110,7 @@ $csrf = Auth::csrfToken();
           <?php if ($fb['status'] !== 'pending'): ?>
           <div class="mt-1">
             <span class="badge <?= $fb['status'] === 'imported' ? 'bg-success' : 'bg-secondary' ?>" style="font-size:.65rem">
-              <?= $fb['status'] === 'imported' ? 'Importiert' : 'Abgelehnt' ?>
+              <?= $fb['status'] === 'imported' ? 'Imported' : 'Rejected' ?>
             </span>
           </div>
           <?php endif; ?>
@@ -121,18 +121,18 @@ $csrf = Auth::csrfToken();
     <?php endif; ?>
   </div>
 
-  <!-- RIGHT: Fragebögen -->
+  <!-- RIGHT: Questionnaires -->
   <div class="col-lg-6">
     <div class="d-flex align-items-center justify-content-between mb-3">
-      <h6 class="mb-0"><i class="bi bi-list-check me-2 text-success"></i>Fragebögen</h6>
+      <h6 class="mb-0"><i class="bi bi-list-check me-2 text-success"></i>Questionnaires</h6>
       <button class="btn btn-outline-success btn-sm py-0" data-bs-toggle="modal" data-bs-target="#createQModal">
-        <i class="bi bi-plus-lg me-1"></i>Erstellen
+        <i class="bi bi-plus-lg me-1"></i>Create
       </button>
     </div>
 
     <?php if (empty($questionnaires)): ?>
     <div class="text-muted small text-center py-4 border border-secondary rounded">
-      Noch keine Fragebögen. Erstelle einen neuen oder nutze ein Template.
+      No questionnaires yet. Create a new one or use a template.
     </div>
     <?php else: ?>
     <div class="d-flex flex-column gap-2">
@@ -150,24 +150,24 @@ $csrf = Auth::csrfToken();
                 <?php endif; ?>
               </div>
               <div class="text-muted small mt-1">
-                <i class="bi bi-people me-1"></i><?= $q['response_count'] ?> Antworten
+                <i class="bi bi-people me-1"></i><?= $q['response_count'] ?> responses
                 <?php if ($q['draft_mode'] ?? 1): ?>
-                &nbsp;<span class="text-warning small"><i class="bi bi-exclamation-triangle"></i> Testdaten</span>
+                &nbsp;<span class="text-warning small"><i class="bi bi-exclamation-triangle"></i> Test data</span>
                 <?php endif; ?>
               </div>
             </div>
             <div class="d-flex gap-1 flex-shrink-0">
               <a href="<?= e(url('tc-questionnaire/' . $q['qr_token'])) ?>" target="_blank"
-                 class="btn btn-outline-secondary btn-sm py-0 px-2" title="Fragebogen öffnen">
+                 class="btn btn-outline-secondary btn-sm py-0 px-2" title="Open questionnaire">
                 <i class="bi bi-box-arrow-up-right" style="font-size:.7rem"></i>
               </a>
               <button class="btn btn-outline-secondary btn-sm py-0 px-2"
                       onclick="navigator.clipboard.writeText(window.location.origin + '<?= e(url('tc-questionnaire/' . $q['qr_token'])) ?>');this.textContent='✓'"
-                      title="Link kopieren">
+                      title="Copy link">
                 <i class="bi bi-clipboard" style="font-size:.7rem"></i>
               </button>
               <?php if ($q['draft_mode'] ?? 1): ?>
-              <button class="btn btn-outline-warning btn-sm py-0 px-2 eq-edit-btn" title="Bearbeiten (Draft)"
+              <button class="btn btn-outline-warning btn-sm py-0 px-2 eq-edit-btn" title="Edit (draft)"
                       data-id="<?= $q['id'] ?>"
                       data-title="<?= e($q['title']) ?>"
                       data-description="<?= e($q['description'] ?? '') ?>"
@@ -176,14 +176,14 @@ $csrf = Auth::csrfToken();
               </button>
               <form method="POST" class="d-inline"
                     action="<?= url('test-customers/' . $order['id'] . '/questionnaires/' . $q['id'] . '/publish') ?>"
-                    onsubmit="return confirm('Fragebogen veröffentlichen?\nBisherige Testantworten werden gelöscht.\nDanach ist keine Bearbeitung mehr möglich.')">
+                    onsubmit="return confirm('Publish questionnaire?\nExisting test answers will be deleted.\nIt cannot be edited afterwards.')">
                 <?= csrfField() ?>
-                <button type="submit" class="btn btn-success btn-sm py-0 px-2" title="Als Live veröffentlichen">
+                <button type="submit" class="btn btn-success btn-sm py-0 px-2" title="Publish as live">
                   <i class="bi bi-rocket-takeoff" style="font-size:.7rem"></i>
                 </button>
               </form>
               <?php endif; ?>
-              <a href="<?= url('test-customers/' . $order['id'] . '/questionnaires/' . $q['id']) ?>" class="btn btn-outline-primary btn-sm py-0 px-2" title="Antworten ansehen">
+              <a href="<?= url('test-customers/' . $order['id'] . '/questionnaires/' . $q['id']) ?>" class="btn btn-outline-primary btn-sm py-0 px-2" title="View responses">
                 <i class="bi bi-bar-chart" style="font-size:.7rem"></i>
               </a>
             </div>
@@ -199,29 +199,29 @@ $csrf = Auth::csrfToken();
 <!-- Respondents Section -->
 <div class="card border-secondary mt-4">
   <div class="card-header border-secondary d-flex align-items-center justify-content-between">
-    <span><i class="bi bi-person-badge me-2 text-warning"></i>Individuelle Testkunden</span>
+    <span><i class="bi bi-person-badge me-2 text-warning"></i>Individual Test Customers</span>
     <div class="d-flex gap-2">
       <a href="<?= url('test-customers/customers') ?>" class="btn btn-outline-secondary btn-sm py-0">
-        <i class="bi bi-people me-1"></i>Verzeichnis
+        <i class="bi bi-people me-1"></i>Directory
       </a>
       <button class="btn btn-outline-warning btn-sm py-0" data-bs-toggle="modal" data-bs-target="#addRespondentModal">
-        <i class="bi bi-person-plus me-1"></i>Hinzufügen
+        <i class="bi bi-person-plus me-1"></i>Add
       </button>
     </div>
   </div>
   <div class="card-body p-0">
     <?php if (empty($respondents)): ?>
     <div class="text-muted small text-center py-3">
-      Noch keine individuellen Testkunden. Lege Testkunden an um persönliche Links ohne Dateneingabe zu generieren.
+      No individual test customers yet. Create test customers to generate personal links without data entry.
     </div>
     <?php else: ?>
     <table class="table table-dark table-sm mb-0">
       <thead><tr>
-        <th>Testkunden-Nr.</th>
-        <th>Bezeichnung (intern)</th>
-        <th>E-Mail (intern)</th>
-        <th>Persönlicher Link</th>
-        <th>Feedbacks</th>
+        <th>Test Customer No.</th>
+        <th>Label (internal)</th>
+        <th>Email (internal)</th>
+        <th>Personal Link</th>
+        <th>Feedback</th>
         <th></th>
       </tr></thead>
       <tbody>
@@ -245,7 +245,7 @@ $csrf = Auth::csrfToken();
           </a>
           <button class="btn btn-outline-secondary btn-sm py-0 px-2"
                   onclick="navigator.clipboard.writeText(window.location.origin + '<?= e($respUrl) ?>');this.textContent='✓'"
-                  title="Link kopieren">
+                  title="Copy link">
             <i class="bi bi-clipboard" style="font-size:.7rem"></i>
           </button>
         </td>
@@ -255,7 +255,7 @@ $csrf = Auth::csrfToken();
         <td class="text-end">
           <form method="POST"
                 action="<?= url("test-customers/" . $order["id"] . "/respondents/" . $resp["id"] . "/delete") ?>"
-                onsubmit="return confirm('Testkunden löschen?')" class="d-inline">
+                onsubmit="return confirm('Delete test customer?')" class="d-inline">
             <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
             <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-1">
               <i class="bi bi-trash" style="font-size:.7rem"></i>
@@ -275,14 +275,14 @@ $csrf = Auth::csrfToken();
   <div class="modal-dialog modal-lg">
     <div class="modal-content bg-dark border-secondary">
       <div class="modal-header border-secondary">
-        <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Testkunde zum Auftrag hinzufügen</h5>
+        <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Add Test Customer to Order</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
         <div class="alert alert-info py-2 small mb-3">
           <i class="bi bi-shield-check me-2"></i>
-          Jeder Testkunde erhält einen persönlichen Link ohne Namenseingabe.
-          Nicht im Verzeichnis? <a href="<?= url('test-customers/customers') ?>" class="alert-link">Zuerst anlegen</a>.
+          Each test customer receives a personal link without entering a name.
+          Not in the directory yet? <a href="<?= url('test-customers/customers') ?>" class="alert-link">Create one first</a>.
         </div>
         <?php
           $allCustomers = Database::fetchAll('SELECT * FROM test_customers ORDER BY customer_number');
@@ -290,8 +290,8 @@ $csrf = Auth::csrfToken();
         ?>
         <?php if (empty($allCustomers)): ?>
         <p class="text-muted text-center py-3">
-          Noch keine Testkunden im Verzeichnis.
-          <a href="<?= url('test-customers/customers') ?>">Jetzt anlegen</a>
+          No test customers in the directory yet.
+          <a href="<?= url('test-customers/customers') ?>">Create one now</a>
         </p>
         <?php else: ?>
         <div style="max-height:350px;overflow-y:auto">
@@ -306,13 +306,13 @@ $csrf = Auth::csrfToken();
               <?php endif; ?>
             </div>
             <?php if ($assigned): ?>
-            <span class="badge bg-success">Bereits zugewiesen</span>
+            <span class="badge bg-success">Already assigned</span>
             <?php else: ?>
             <form method="POST" action="<?= url('test-customers/' . $order['id'] . '/respondents/add-from-customer') ?>">
               <?= csrfField() ?>
               <input type="hidden" name="test_customer_id" value="<?= $tc['id'] ?>">
               <button type="submit" class="btn btn-outline-warning btn-sm py-0 px-2">
-                <i class="bi bi-plus-lg me-1"></i>Hinzufügen
+                <i class="bi bi-plus-lg me-1"></i>Add
               </button>
             </form>
             <?php endif; ?>
@@ -323,9 +323,9 @@ $csrf = Auth::csrfToken();
       </div>
       <div class="modal-footer border-secondary">
         <a href="<?= url('test-customers/customers') ?>" class="btn btn-outline-secondary">
-          <i class="bi bi-people me-1"></i>Verzeichnis verwalten
+          <i class="bi bi-people me-1"></i>Manage Directory
         </a>
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
   </div>
@@ -336,38 +336,38 @@ $csrf = Auth::csrfToken();
   <div class="modal-dialog">
     <div class="modal-content bg-dark border-secondary">
       <div class="modal-header border-secondary">
-        <h5 class="modal-title">Auftrag bearbeiten</h5>
+        <h5 class="modal-title">Edit Order</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <form method="POST" action="<?= url('test-customers/' . $order['id'] . '/update') ?>">
         <?= csrfField() ?>
         <div class="modal-body">
           <div class="mb-3">
-            <label class="form-label">Titel</label>
+            <label class="form-label">Title</label>
             <input type="text" name="title" class="form-control" value="<?= e($order['title']) ?>" required>
           </div>
           <div class="mb-3">
             <label class="form-label">Status</label>
             <select name="status" class="form-select">
-              <option value="active" <?= $order['status'] === 'active' ? 'selected' : '' ?>>Aktiv</option>
-              <option value="draft" <?= $order['status'] === 'draft' ? 'selected' : '' ?>>Entwurf</option>
-              <option value="closed" <?= $order['status'] === 'closed' ? 'selected' : '' ?>>Geschlossen</option>
+              <option value="active" <?= $order['status'] === 'active' ? 'selected' : '' ?>>Active</option>
+              <option value="draft" <?= $order['status'] === 'draft' ? 'selected' : '' ?>>Draft</option>
+              <option value="closed" <?= $order['status'] === 'closed' ? 'selected' : '' ?>>Closed</option>
             </select>
           </div>
           <div class="mb-3">
-            <label class="form-label">Beschreibung (intern)</label>
+            <label class="form-label">Description (internal)</label>
             <textarea name="description" class="form-control" rows="2"><?= e($order['description'] ?? '') ?></textarea>
           </div>
           <div class="mb-3">
-            <label class="form-label">Anleitung / Erklaerung fuer Kunden</label>
+            <label class="form-label">Instructions / Explanation for customers</label>
             <textarea name="feedback_instructions" class="form-control" rows="4"
-                      placeholder="Diese Erklaerung wird oben im Feedback-Formular angezeigt..."><?= e($order['feedback_instructions'] ?? '') ?></textarea>
-            <div class="form-text">Wird dem Kunden oben im Feedback-Formular angezeigt.</div>
+                      placeholder="This explanation is shown at the top of the feedback form..."><?= e($order['feedback_instructions'] ?? '') ?></textarea>
+            <div class="form-text">Shown to the customer at the top of the feedback form.</div>
           </div>
         </div>
         <div class="modal-footer border-secondary">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="submit" class="btn btn-primary">Speichern</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
         </div>
       </form>
     </div>
@@ -379,7 +379,7 @@ $csrf = Auth::csrfToken();
   <div class="modal-dialog modal-lg">
     <div class="modal-content bg-dark border-secondary">
       <div class="modal-header border-secondary">
-        <h5 class="modal-title"><i class="bi bi-list-check me-2"></i>Fragebogen erstellen</h5>
+        <h5 class="modal-title"><i class="bi bi-list-check me-2"></i>Create Questionnaire</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <form method="POST" action="<?= url('test-customers/' . $order['id'] . '/questionnaires/create') ?>">
@@ -387,9 +387,9 @@ $csrf = Auth::csrfToken();
         <div class="modal-body">
           <?php if (!empty($templates)): ?>
           <div class="mb-3">
-            <label class="form-label small">Template verwenden (optional)</label>
+            <label class="form-label small">Use template (optional)</label>
             <select name="template_id" class="form-select" onchange="loadTemplate(this.value)">
-              <option value="">-- Kein Template --</option>
+              <option value="">-- No template --</option>
               <?php foreach ($templates as $t): ?>
               <option value="<?= $t['id'] ?>"><?= e($t['title']) ?></option>
               <?php endforeach; ?>
@@ -398,20 +398,20 @@ $csrf = Auth::csrfToken();
           <hr class="border-secondary">
           <?php endif; ?>
           <div class="mb-3">
-            <label class="form-label">Titel <span class="text-danger">*</span></label>
+            <label class="form-label">Title <span class="text-danger">*</span></label>
             <input type="text" name="title" id="qTitle" class="form-control" required>
           </div>
           <div class="mb-3">
-            <label class="form-label">Anleitung / Info-Text für Kunden</label>
+            <label class="form-label">Instructions / Info text for customers</label>
             <textarea name="description" id="qDesc" class="form-control" rows="3"
-                      placeholder="Dieser Text wird oben im Fragebogen als Hinweis angezeigt..."></textarea>
-            <div class="form-text">Wird dem Kunden als blauer Info-Banner oben im Fragebogen angezeigt.</div>
+                      placeholder="This text is shown at the top of the questionnaire as a notice..."></textarea>
+            <div class="form-text">Shown to the customer as a blue info banner at the top of the questionnaire.</div>
           </div>
           <div class="mb-2">
             <div class="d-flex align-items-center justify-content-between mb-2">
-              <label class="form-label mb-0">Fragen</label>
+              <label class="form-label mb-0">Questions</label>
               <button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="addQuestion()">
-                <i class="bi bi-plus-lg me-1"></i>Frage hinzufügen
+                <i class="bi bi-plus-lg me-1"></i>Add Question
               </button>
             </div>
             <div id="questionList"></div>
@@ -419,8 +419,8 @@ $csrf = Auth::csrfToken();
           </div>
         </div>
         <div class="modal-footer border-secondary">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="submit" class="btn btn-success" onclick="saveQuestions()">Erstellen</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-success" onclick="saveQuestions()">Create</button>
         </div>
       </form>
     </div>
@@ -433,34 +433,34 @@ $csrf = Auth::csrfToken();
   <div class="modal-dialog modal-lg">
     <div class="modal-content bg-dark border-secondary">
       <div class="modal-header border-secondary">
-        <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Fragebogen bearbeiten</h5>
+        <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Edit Questionnaire</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <form method="POST" id="editQForm">
         <?= csrfField() ?>
         <div class="modal-body">
           <div class="mb-3">
-            <label class="form-label">Titel <span class="text-danger">*</span></label>
+            <label class="form-label">Title <span class="text-danger">*</span></label>
             <input type="text" name="title" id="eqTitle" class="form-control" required>
           </div>
           <div class="mb-3">
-            <label class="form-label">Anleitung / Info-Text für Kunden</label>
+            <label class="form-label">Instructions / Info text for customers</label>
             <textarea name="description" id="eqDesc" class="form-control" rows="3"
-                      placeholder="Dieser Text wird oben im Fragebogen als blauer Info-Banner angezeigt..."></textarea>
-            <div class="form-text">Wird dem Kunden oben im Fragebogen angezeigt.</div>
+                      placeholder="This text is shown at the top of the questionnaire as a blue info banner..."></textarea>
+            <div class="form-text">Shown to the customer at the top of the questionnaire.</div>
           </div>
           <div class="d-flex align-items-center justify-content-between mb-2">
-            <label class="form-label mb-0">Fragen</label>
+            <label class="form-label mb-0">Questions</label>
             <button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="addEqQuestion()">
-              <i class="bi bi-plus-lg me-1"></i>Frage
+              <i class="bi bi-plus-lg me-1"></i>Question
             </button>
           </div>
           <div id="eqQuestionList"></div>
           <input type="hidden" name="questions" id="eqQuestionsJson" value="[]">
         </div>
         <div class="modal-footer border-secondary">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="submit" class="btn btn-primary" onclick="saveEqQuestions()">Speichern</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary" onclick="saveEqQuestions()">Save</button>
         </div>
       </form>
     </div>
@@ -505,14 +505,14 @@ function renderEqQuestions() {
     var textInp = document.createElement('input');
     textInp.type = 'text';
     textInp.className = 'form-control form-control-sm mb-1';
-    textInp.placeholder = 'Frage...';
+    textInp.placeholder = 'Question...';
     textInp.value = q.text || '';
     textInp.addEventListener('input', function() { _eqQuestions[i].text = this.value; });
     inner.appendChild(textInp);
 
     var sel = document.createElement('select');
     sel.className = 'form-select form-select-sm';
-    [['text','Freitext'],['rating','Bewertung (1-5)'],['select','Auswahl'],['yesno','Ja / Nein']].forEach(function(opt) {
+    [['text','Free text'],['rating','Rating (1-5)'],['select','Select'],['yesno','Yes / No']].forEach(function(opt) {
       var o = document.createElement('option');
       o.value = opt[0]; o.textContent = opt[1];
       if (q.type === opt[0]) o.selected = true;
@@ -525,7 +525,7 @@ function renderEqQuestions() {
       var optInp = document.createElement('input');
       optInp.type = 'text';
       optInp.className = 'form-control form-control-sm mt-1';
-      optInp.placeholder = 'Optionen (Komma getrennt)';
+      optInp.placeholder = 'Options (comma separated)';
       optInp.value = (q.options || []).join(', ');
       optInp.addEventListener('input', function() {
         _eqQuestions[i].options = this.value.split(',').map(function(s){ return s.trim(); }).filter(Boolean);
@@ -580,7 +580,7 @@ function renderQuestions() {
     var textInp = document.createElement('input');
     textInp.type = 'text';
     textInp.className = 'form-control form-control-sm mb-1';
-    textInp.placeholder = 'Frage...';
+    textInp.placeholder = 'Question...';
     textInp.value = q.text || '';
     textInp.addEventListener('input', function() { _questions[i].text = this.value; });
     inner.appendChild(textInp);
@@ -588,7 +588,7 @@ function renderQuestions() {
     // Type select
     var sel = document.createElement('select');
     sel.className = 'form-select form-select-sm';
-    [['text','Freitext'],['rating','Bewertung (1-5)'],['select','Auswahl'],['yesno','Ja / Nein']].forEach(function(opt) {
+    [['text','Free text'],['rating','Rating (1-5)'],['select','Select'],['yesno','Yes / No']].forEach(function(opt) {
       var o = document.createElement('option');
       o.value = opt[0]; o.textContent = opt[1];
       if (q.type === opt[0]) o.selected = true;
@@ -602,7 +602,7 @@ function renderQuestions() {
       var optInp = document.createElement('input');
       optInp.type = 'text';
       optInp.className = 'form-control form-control-sm mt-1';
-      optInp.placeholder = 'Optionen (Komma getrennt)';
+      optInp.placeholder = 'Options (comma separated)';
       optInp.value = (q.options || []).join(', ');
       optInp.addEventListener('input', function() {
         _questions[i].options = this.value.split(',').map(function(s) { return s.trim(); }).filter(Boolean);

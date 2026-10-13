@@ -1,29 +1,29 @@
 <div class="d-flex align-items-center justify-content-between mb-4">
   <div>
-    <a href="<?= url('test-customers') ?>" class="text-muted small"><i class="bi bi-arrow-left me-1"></i>Aufträge</a>
-    <h5 class="mt-1 mb-0"><i class="bi bi-people me-2"></i>Testkunden Verzeichnis</h5>
+    <a href="<?= url('test-customers') ?>" class="text-muted small"><i class="bi bi-arrow-left me-1"></i>Orders</a>
+    <h5 class="mt-1 mb-0"><i class="bi bi-people me-2"></i>Test Customer Directory</h5>
   </div>
   <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addCustomerModal">
-    <i class="bi bi-plus-lg me-1"></i>Neuer Testkunde
+    <i class="bi bi-plus-lg me-1"></i>New Test Customer
   </button>
 </div>
 
 <?php if (empty($customers)): ?>
 <div class="text-center text-muted py-5">
   <i class="bi bi-people" style="font-size:3rem;opacity:.3"></i>
-  <p class="mt-3">Noch keine Testkunden. Lege Testkunden zentral an und weise sie dann Aufträgen zu.</p>
+  <p class="mt-3">No test customers yet. Create test customers centrally and then assign them to orders.</p>
 </div>
 <?php else: ?>
 <div class="card border-secondary">
   <table class="table table-dark table-hover mb-0">
     <thead class="border-secondary">
       <tr>
-        <th>Nr.</th>
-        <th>Bezeichnung</th>
-        <th>E-Mail</th>
-        <th>Notizen</th>
-        <th>Aufträge</th>
-        <th>Erstellt</th>
+        <th>No.</th>
+        <th>Label</th>
+        <th>Email</th>
+        <th>Notes</th>
+        <th>Orders</th>
+        <th>Created</th>
         <th></th>
       </tr>
     </thead>
@@ -46,7 +46,7 @@
           <i class="bi bi-pencil" style="font-size:.7rem"></i>
         </button>
         <form method="POST" action="<?= url('test-customers/customers/' . $tc['id'] . '/delete') ?>"
-              onsubmit="return confirm('Testkunde löschen?')" class="d-inline">
+              onsubmit="return confirm('Delete test customer?')" class="d-inline">
           <?= csrfField() ?>
           <button class="btn btn-outline-danger btn-sm py-0 px-2">
             <i class="bi bi-trash" style="font-size:.7rem"></i>
@@ -65,7 +65,7 @@
   <div class="modal-dialog">
     <div class="modal-content bg-dark border-secondary">
       <div class="modal-header border-secondary">
-        <h5 class="modal-title" id="customerModalTitle">Neuer Testkunde</h5>
+        <h5 class="modal-title" id="customerModalTitle">New Test Customer</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <form method="POST" action="<?= url('test-customers/customers/save') ?>" id="customerForm">
@@ -73,29 +73,29 @@
         <input type="hidden" name="id" id="customerId" value="">
         <div class="modal-body">
           <div class="mb-3">
-            <label class="form-label">Testkundennummer <span class="text-danger">*</span></label>
+            <label class="form-label">Test Customer Number <span class="text-danger">*</span></label>
             <input type="text" name="customer_number" id="customerNumber" class="form-control"
-                   required maxlength="50" placeholder="z.B. TK-001">
+                   required maxlength="50" placeholder="e.g. TK-001">
           </div>
           <div class="mb-3">
-            <label class="form-label">Bezeichnung <span class="text-danger">*</span></label>
+            <label class="form-label">Label <span class="text-danger">*</span></label>
             <input type="text" name="label" id="customerLabel" class="form-control"
-                   required maxlength="150" placeholder="Name oder Beschreibung">
+                   required maxlength="150" placeholder="Name or description">
           </div>
           <div class="mb-3">
-            <label class="form-label">E-Mail <span class="text-muted small">(optional)</span></label>
+            <label class="form-label">Email <span class="text-muted small">(optional)</span></label>
             <input type="email" name="email" id="customerEmail" class="form-control"
-                   maxlength="200" placeholder="z.B. max@firma.de">
+                   maxlength="200" placeholder="e.g. max@company.com">
           </div>
           <div class="mb-3">
-            <label class="form-label">Notizen <span class="text-muted small">(optional)</span></label>
+            <label class="form-label">Notes <span class="text-muted small">(optional)</span></label>
             <textarea name="notes" id="customerNotes" class="form-control" rows="2"
-                      placeholder="Interne Notizen..."></textarea>
+                      placeholder="Internal notes..."></textarea>
           </div>
         </div>
         <div class="modal-footer border-secondary">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-          <button type="submit" class="btn btn-primary">Speichern</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
         </div>
       </form>
     </div>
@@ -109,7 +109,7 @@ function editCustomer(tc) {
   document.getElementById('customerLabel').value  = tc.label;
   document.getElementById('customerEmail').value  = tc.email || '';
   document.getElementById('customerNotes').value  = tc.notes || '';
-  document.getElementById('customerModalTitle').textContent = 'Testkunde bearbeiten';
+  document.getElementById('customerModalTitle').textContent = 'Edit Test Customer';
   new bootstrap.Modal(document.getElementById('addCustomerModal')).show();
 }
 </script>
