@@ -344,6 +344,14 @@ $schedUrl = url('reports/schedules/');
         <p style="font-size:10px;color:#6b7280;margin:0">Gilt für den gesamten Bericht. Einzelne Blöcke können überschrieben werden.</p>
 
         <hr class="rd-hr">
+        <div class="rd-section-title"><i class="bi bi-translate me-1"></i>Sprache</div>
+        <select id="rdLanguage" class="form-select form-select-sm mb-2">
+          <option value="de">Deutsch</option>
+          <option value="en">English</option>
+        </select>
+        <p style="font-size:10px;color:#6b7280;margin:0">Sprache der generierten Berichte (PDF/Ansicht). Bestehende Templates bleiben auf Deutsch.</p>
+
+        <hr class="rd-hr">
 
         <!-- Preview filters (for template preview only) -->
         <div class="rd-section-title" title="Nur für die Vorschau — beim Bericht generieren wählst du die echten Daten">
@@ -525,7 +533,7 @@ function rdReset() {
   ['rdName','rdDesc','rdLogo','rdHTitle','rdHSub','rdFooter','rdOrientation',
    'rdPvProject','rdPvFrom','rdPvTo'].forEach(function(id){ rdSv(id,''); });
   rdSv('rdColor','#1e3a5f'); rdSv('rdColorHex','#1e3a5f'); rdSv('rdFont','Arial');
-  rdSv('rdHBg','#1e3a5f');
+  rdSv('rdHBg','#1e3a5f'); rdSv('rdLanguage','de');
   rdSc('rdHDate',true); rdSc('rdFPage',true);
   document.querySelectorAll('.rd-pv-etype').forEach(function(cb){cb.checked=false;});
 }
@@ -535,6 +543,7 @@ function rdLoadCfg(cfg) {
   rdSv('rdDesc',     cfg.description);
   var b=cfg.branding||{};
   rdSv('rdOrientation', cfg.orientation || 'portrait');
+  rdSv('rdLanguage', cfg.language || 'de');
   rdSv('rdLogo',     b.logo);
   rdSv('rdColor',    b.primaryColor||'#1e3a5f');
   rdSv('rdColorHex', b.primaryColor||'#1e3a5f');
@@ -564,6 +573,7 @@ function rdGetCfg() {
     name:        rdGv('rdName').trim(),
     description: rdGv('rdDesc').trim(),
     orientation: rdGv('rdOrientation') || 'portrait',
+    language:    rdGv('rdLanguage') || 'de',
     branding:    {logo:rdGv('rdLogo'),primaryColor:rdGv('rdColor'),font:rdGv('rdFont')},
     header:      {title:rdGv('rdHTitle'),subtitle:rdGv('rdHSub'),bg:rdGv('rdHBg'),showDate:rdGc('rdHDate')},
     footer:      {text:rdGv('rdFooter'),showPage:rdGc('rdFPage')},

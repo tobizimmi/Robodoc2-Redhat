@@ -24,14 +24,14 @@ $open   = count(array_filter($entries, fn($e) => in_array($e['status']??'', $ope
 $done   = count(array_filter($entries, fn($e) => in_array($e['status']??'', $doneSt)));
 $types  = count(array_unique(array_filter(array_column($entries,'type_name'))));
 
-$colLabels = [
-    'entry_date'=>'Datum','title'=>'Titel','status'=>'Status','priority'=>'Priorität',
-    'type_name'=>'Typ','project_name'=>'Projekt','creator'=>'Ersteller',
-    'description'=>'Beschreibung','mower_serial'=>'Seriennummer',
-    'firmware_version'=>'Firmware','app_version'=>'App Version',
-    'epic_title'=>'Epic','parent_title'=>'Parent','tag_names'=>'Tags',
-    'jira_issue_key'=>'Jira','zentao_bug_id'=>'Zentao','project_status_robot'=>'Robot',
-];
+// Report language: templates saved before this existed have no config.language,
+// so they keep rendering in German exactly as before.
+$lang = (($cfg['language'] ?? 'de') === 'en') ? 'en' : 'de';
+require __DIR__ . '/pdf_i18n.php';
+$colLabels = $rdI18nCols[$lang];
+$t = function(string $key) use ($rdI18n, $lang): string {
+    return $rdI18n[$lang][$key] ?? $rdI18n['de'][$key] ?? $key;
+};
 $statusColors = [
     'new'=>'#6b7280','open'=>'#6b7280','internal'=>'#0ea5e9','reviewed'=>'#3b82f6',
     'pending_at_supplier'=>'#f59e0b','ready_for_test'=>'#10b981',
@@ -127,7 +127,7 @@ $colDefaultWidths = [
     'jira_issue_key'=>1,'zentao_bug_id'=>1,'project_status_robot'=>1,
 ];
 ?><!DOCTYPE html>
-<html lang="de">
+<html lang="<?= htmlspecialchars($lang) ?>">
 <head>
 <meta charset="utf-8">
 <title><?= htmlspecialchars($header['title'] ?? $tpl['name']) ?></title>
@@ -256,13 +256,13 @@ function rdPrint() {
   d.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center';
   var box = document.createElement('div');
   box.style.cssText = 'background:#1e3a5f;color:#fff;padding:28px 32px;border-radius:10px;max-width:420px;text-align:center';
-  box.innerHTML = '<div style="font-size:18px;font-weight:700;margin-bottom:12px">&#128196; PDF speichern</div>'
-    + '<p style="font-size:13px;line-height:1.7;margin-bottom:18px">Im Druckdialog bitte einstellen:<br>'
-    + '<b>&#10112; R&auml;nder &rarr; Keine</b><br>'
-    + '<b>&#10113; Kopf- und Fu&szlig;zeilen &rarr; Aus</b></p>'
-    + '<button id="rdDoPrint" style="background:#fff;color:#1e3a5f;border:none;padding:9px 18px;border-radius:6px;font-weight:700;font-size:13px;cursor:pointer;margin-right:6px">Hochformat</button>'
-    + '<button id="rdDoLandscape" style="background:#e8f0ff;color:#1e3a5f;border:none;padding:9px 18px;border-radius:6px;font-weight:700;font-size:13px;cursor:pointer;margin-right:6px">Querformat</button>'
-    + '<button id="rdCancelPrint" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);padding:9px 14px;border-radius:6px;font-size:12px;cursor:pointer">Abbrechen</button>';
+  box.innerHTML = '<div style="font-size:18px;font-weight:700;margin-bottom:12px">' + <?= json_encode($t('pdf_save_title')) ?> + '</div>'
+    + '<p style="font-size:13px;line-height:1.7;margin-bottom:18px">' + <?= json_encode($t('pdf_dialog_hint')) ?> + '<br>'
+    + '<b>' + <?= json_encode($t('pdf_margins')) ?> + '</b><br>'
+    + '<b>' + <?= json_encode($t('pdf_headers_footers')) ?> + '</b></p>'
+    + '<button id="rdDoPrint" style="background:#fff;color:#1e3a5f;border:none;padding:9px 18px;border-radius:6px;font-weight:700;font-size:13px;cursor:pointer;margin-right:6px">' + <?= json_encode($t('pdf_portrait')) ?> + '</button>'
+    + '<button id="rdDoLandscape" style="background:#e8f0ff;color:#1e3a5f;border:none;padding:9px 18px;border-radius:6px;font-weight:700;font-size:13px;cursor:pointer;margin-right:6px">' + <?= json_encode($t('pdf_landscape')) ?> + '</button>'
+    + '<button id="rdCancelPrint" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);padding:9px 14px;border-radius:6px;font-size:12px;cursor:pointer">' + <?= json_encode($t('pdf_cancel')) ?> + '</button>';
   d.appendChild(box);
   document.body.appendChild(d);
   document.getElementById('rdDoPrint').addEventListener('click', function() { rdHideHint(); window.print(); });
@@ -281,19 +281,19 @@ window.addEventListener('load', function() {
 <!-- Print bar -->
 <div class="print-bar no-print">
   <strong><?= htmlspecialchars($tpl['name']) ?></strong>
-  <a href="javascript:history.back()" style="color:#fff;opacity:.8;font-size:12px;margin-left:4px">← Zurück</a>
+  <a href="javascript:history.back()" style="color:#fff;opacity:.8;font-size:12px;margin-left:4px"><?= htmlspecialchars($t('back')) ?></a>
   <?php if (!empty($project)): ?>
   <span style="font-size:11px;opacity:.8;margin-left:8px">
     <i style="display:inline-block;width:10px;height:10px;border-radius:50%;background:<?= htmlspecialchars($project['color']??'#888') ?>;vertical-align:middle;margin-right:4px"></i>
     <?= htmlspecialchars($project['name']) ?>
     <?php if (!empty($filters['date_from'])): ?>
-    · <?= htmlspecialchars($filters['date_from']) ?> – <?= htmlspecialchars($filters['date_to'] ?: 'heute') ?>
+    · <?= htmlspecialchars($filters['date_from']) ?> – <?= htmlspecialchars($filters['date_to'] ?: $t('today')) ?>
     <?php endif; ?>
   </span>
   <?php endif; ?>
   <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-    <span style="font-size:10px;opacity:.6">Ränder: Keine · Kopf/Fußzeilen: Aus</span>
-    <button onclick="rdPrint()" style="background:#fff;color:<?= htmlspecialchars($primary) ?>;border:none;padding:5px 16px;border-radius:4px;font-weight:700;cursor:pointer;font-size:12px">🖨 PDF speichern</button>
+    <span style="font-size:10px;opacity:.6"><?= htmlspecialchars($t('print_hint_bar')) ?></span>
+    <button onclick="rdPrint()" style="background:#fff;color:<?= htmlspecialchars($primary) ?>;border:none;padding:5px 16px;border-radius:4px;font-weight:700;cursor:pointer;font-size:12px"><?= htmlspecialchars($t('save_pdf')) ?></button>
   </div>
 </div>
 <div style="height:44px" class="no-print"></div>
@@ -314,7 +314,7 @@ window.addEventListener('load', function() {
   <div class="rpt-header-meta">
     <?= date('d.m.Y H:i') ?>
     <?php if (!empty($filters['date_from'])): ?>
-    <br><?= htmlspecialchars($filters['date_from']) ?> – <?= htmlspecialchars($filters['date_to'] ?: 'heute') ?>
+    <br><?= htmlspecialchars($filters['date_from']) ?> – <?= htmlspecialchars($filters['date_to'] ?: $t('today')) ?>
     <?php endif; ?>
   </div>
   <?php endif; ?>
@@ -372,15 +372,15 @@ $tCycles  = $td['cycles'] ?? [];
 ?>
 <?php if ($tTotal > 0): ?>
 <div class="section no-break">
-  <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Test-Status Übersicht') ?></div>
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: $t('test_status_overview')) ?></div>
   <?php if ($tCycles): ?>
   <div style="font-size:9px;color:#6b7280;margin-bottom:8px">
     <?php if (count($tCycles) === 1): ?>
-    Cycle: <strong><?= htmlspecialchars($tCycles[0]['name']) ?></strong>
-    <?php if (!empty($tCycles[0]['plan_name'])): ?> · Plan: <?= htmlspecialchars($tCycles[0]['plan_name']) ?><?php endif; ?>
-    <?php if (!empty($tCycles[0]['environment'])): ?> · Umgebung: <?= htmlspecialchars($tCycles[0]['environment']) ?><?php endif; ?>
+    <?= htmlspecialchars($t('cycle')) ?>: <strong><?= htmlspecialchars($tCycles[0]['name']) ?></strong>
+    <?php if (!empty($tCycles[0]['plan_name'])): ?> · <?= htmlspecialchars($t('plan')) ?>: <?= htmlspecialchars($tCycles[0]['plan_name']) ?><?php endif; ?>
+    <?php if (!empty($tCycles[0]['environment'])): ?> · <?= htmlspecialchars($t('environment')) ?>: <?= htmlspecialchars($tCycles[0]['environment']) ?><?php endif; ?>
     <?php else: ?>
-    Cycles (kombiniert): <strong><?= htmlspecialchars(implode(', ', array_column($tCycles, 'name'))) ?></strong>
+    <?= htmlspecialchars($t('cycles_combined')) ?>: <strong><?= htmlspecialchars(implode(', ', array_column($tCycles, 'name'))) ?></strong>
     <?php endif; ?>
   </div>
   <?php endif; ?>
@@ -388,7 +388,7 @@ $tCycles  = $td['cycles'] ?? [];
     <?php
     $pieColors = ['#10b981','#ef4444','#f59e0b','#3b82f6','#6b7280','#818cf8'];
     $pieVals   = [$tPassed,$tFailed,$tPending,$tSkipped,$tBlocked,$tNew];
-    $pieLabels = ['Bestanden','Fehlgeschlagen','Ausstehend','Übersprungen','Blockiert','Neu'];
+    $pieLabels = [$t('passed'), $t('failed'), $t('pending'), $t('skipped'), $t('blocked'), $t('new')];
     $pieR = 40; $pieCx = 50; $pieCy = 50;
     $pieStart = -M_PI/2;
     $piePaths = '';
@@ -407,7 +407,7 @@ $tCycles  = $td['cycles'] ?? [];
       <?= $piePaths ?>
       <circle cx="50" cy="50" r="22" fill="white"/>
       <text x="50" y="47" text-anchor="middle" font-size="10" font-weight="bold" fill="#111"><?= $tPct ?>%</text>
-      <text x="50" y="57" text-anchor="middle" font-size="7" fill="#6b7280">bestanden</text>
+      <text x="50" y="57" text-anchor="middle" font-size="7" fill="#6b7280"><?= htmlspecialchars($t('passed_lc')) ?></text>
     </svg>
     <div style="flex:1">
       <?php foreach ($pieLabels as $pli => $plbl): ?>
@@ -419,25 +419,25 @@ $tCycles  = $td['cycles'] ?? [];
       <?php endforeach; ?>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">
-      <div style="background:#f0fdf4;border-radius:4px;padding:5px;text-align:center"><div style="font-size:14px;font-weight:800;color:#10b981"><?= $tPassed ?></div><div style="font-size:7px;color:#6b7280">Bestanden</div></div>
-      <div style="background:#fef2f2;border-radius:4px;padding:5px;text-align:center"><div style="font-size:14px;font-weight:800;color:#ef4444"><?= $tFailed ?></div><div style="font-size:7px;color:#6b7280">Fehlgeschl.</div></div>
-      <div style="background:#fffbeb;border-radius:4px;padding:5px;text-align:center"><div style="font-size:14px;font-weight:800;color:#f59e0b"><?= $tPending ?></div><div style="font-size:7px;color:#6b7280">Ausstehend</div></div>
-      <div style="background:#f9fafb;border-radius:4px;padding:5px;text-align:center"><div style="font-size:14px;font-weight:800;color:#374151"><?= $tTotal ?></div><div style="font-size:7px;color:#6b7280">Gesamt</div></div>
+      <div style="background:#f0fdf4;border-radius:4px;padding:5px;text-align:center"><div style="font-size:14px;font-weight:800;color:#10b981"><?= $tPassed ?></div><div style="font-size:7px;color:#6b7280"><?= htmlspecialchars($t('passed')) ?></div></div>
+      <div style="background:#fef2f2;border-radius:4px;padding:5px;text-align:center"><div style="font-size:14px;font-weight:800;color:#ef4444"><?= $tFailed ?></div><div style="font-size:7px;color:#6b7280"><?= htmlspecialchars($t('failed_short')) ?></div></div>
+      <div style="background:#fffbeb;border-radius:4px;padding:5px;text-align:center"><div style="font-size:14px;font-weight:800;color:#f59e0b"><?= $tPending ?></div><div style="font-size:7px;color:#6b7280"><?= htmlspecialchars($t('pending')) ?></div></div>
+      <div style="background:#f9fafb;border-radius:4px;padding:5px;text-align:center"><div style="font-size:14px;font-weight:800;color:#374151"><?= $tTotal ?></div><div style="font-size:7px;color:#6b7280"><?= htmlspecialchars($t('total')) ?></div></div>
     </div>
   </div>
   <?php if (!empty($td['runs'])): ?>
   <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:8px">
     <thead><tr style="background:#f3f4f6">
-      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb">Test Run</th>
+      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb"><?= htmlspecialchars($t('test_run')) ?></th>
       <th style="padding:3px 6px;text-align:center;border:1px solid #e5e7eb;color:#10b981">✓</th>
       <th style="padding:3px 6px;text-align:center;border:1px solid #e5e7eb;color:#ef4444">✗</th>
       <th style="padding:3px 6px;text-align:center;border:1px solid #e5e7eb;color:#f59e0b">⏳</th>
-      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb">Tester</th>
+      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb"><?= htmlspecialchars($t('tester')) ?></th>
     </tr></thead>
     <tbody>
       <?php foreach ($td['runs'] as $trun): ?>
       <tr>
-        <td style="padding:3px 6px;border:1px solid #e5e7eb"><?= htmlspecialchars($trun['name'] ?: 'Run #'.$trun['id']) ?></td>
+        <td style="padding:3px 6px;border:1px solid #e5e7eb"><?= htmlspecialchars($trun['name'] ?: $t('run_prefix').$trun['id']) ?></td>
         <td style="padding:3px 6px;border:1px solid #e5e7eb;text-align:center;color:#10b981;font-weight:bold"><?= (int)($trun['passed']??0) ?></td>
         <td style="padding:3px 6px;border:1px solid #e5e7eb;text-align:center;color:#ef4444;font-weight:bold"><?= (int)($trun['failed']??0) ?></td>
         <td style="padding:3px 6px;border:1px solid #e5e7eb;text-align:center;color:#f59e0b"><?= (int)($trun['pending']??0) ?></td>
@@ -448,32 +448,32 @@ $tCycles  = $td['cycles'] ?? [];
   </table>
   <?php endif; ?>
 </div>
-<?php else: ?><div class="section" style="background:#fff3cd;padding:8px;border-radius:4px;font-size:9px">⚠ Kein Test Cycle oder keine Ergebnisse vorhanden.</div><?php endif; ?>
+<?php else: ?><div class="section" style="background:#fff3cd;padding:8px;border-radius:4px;font-size:9px"><?= htmlspecialchars($t('no_test_cycle')) ?></div><?php endif; ?>
 
 <?php elseif ($btype === 'test_cycle_results'): ?>
 <?php $td2 = $data['testData'] ?? []; $tcFailed = $td2['failed'] ?? []; ?>
 <?php if ($tcFailed): ?>
 <div class="section">
-  <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Fehlgeschlagene Tests ('.count($tcFailed).')') ?></div>
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: ($t('failed_tests').' ('.count($tcFailed).')')) ?></div>
   <?php foreach ($tcFailed as $tcr): ?>
   <?php $tcEids = $tcr['entry_ids'] ? explode(',', $tcr['entry_ids']) : []; $tcEtitles = $tcr['entry_titles'] ? explode('||', $tcr['entry_titles']) : []; ?>
   <div style="margin-bottom:6px;padding:5px 7px;border-left:3px solid #ef4444;background:#fef2f2;border-radius:0 3px 3px 0">
     <div style="font-size:9px;font-weight:700;color:#dc2626"><?= htmlspecialchars($tcr['test_name'] ?? 'Test #'.$tcr['id']) ?></div>
     <?php if (!empty($tcr['notes'])): ?><div style="font-size:8px;color:#4b5563;margin-top:2px"><?= nl2br(htmlspecialchars($tcr['notes'])) ?></div><?php endif; ?>
-    <?php if ($tcEids): ?><div style="font-size:7px;color:#6b7280;margin-top:2px">Einträge: <?php foreach ($tcEids as $ei => $eid): ?><span style="background:#e5e7eb;border-radius:2px;padding:1px 3px;margin-right:2px">#<?= htmlspecialchars($eid) ?> <?= htmlspecialchars(substr($tcEtitles[$ei]??'',0,25)) ?></span><?php endforeach; ?></div><?php endif; ?>
+    <?php if ($tcEids): ?><div style="font-size:7px;color:#6b7280;margin-top:2px"><?= htmlspecialchars($t('entries_label')) ?>: <?php foreach ($tcEids as $ei => $eid): ?><span style="background:#e5e7eb;border-radius:2px;padding:1px 3px;margin-right:2px">#<?= htmlspecialchars($eid) ?> <?= htmlspecialchars(substr($tcEtitles[$ei]??'',0,25)) ?></span><?php endforeach; ?></div><?php endif; ?>
     <div style="font-size:7px;color:#9ca3af;margin-top:1px"><?= htmlspecialchars($tcr['tester_name']??'—') ?><?php if (!empty($tcr['executed_at'])): ?> · <?= substr($tcr['executed_at'],0,16) ?><?php endif; ?></div>
   </div>
   <?php endforeach; ?>
 </div>
-<?php else: ?><div class="section" style="background:#f0fdf4;padding:8px;border-radius:4px;font-size:9px;color:#15803d">✓ Keine fehlgeschlagenen Tests.</div><?php endif; ?>
+<?php else: ?><div class="section" style="background:#f0fdf4;padding:8px;border-radius:4px;font-size:9px;color:#15803d"><?= htmlspecialchars($t('no_failed_tests')) ?></div><?php endif; ?>
 
 <?php elseif ($btype === 'test_cycle_open'): ?>
 <?php $td3 = $data['testData'] ?? []; $tcPending = $td3['pending'] ?? []; ?>
 <?php if ($tcPending): ?>
 <div class="section no-break">
-  <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Offene Tests ('.count($tcPending).')') ?></div>
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: ($t('open_tests').' ('.count($tcPending).')')) ?></div>
   <table style="width:100%;border-collapse:collapse;font-size:8px">
-    <thead><tr style="background:#fffbeb"><th style="padding:3px 6px;text-align:left;border:1px solid #fde68a">Test Case</th><th style="padding:3px 6px;text-align:left;border:1px solid #fde68a">Beschreibung</th></tr></thead>
+    <thead><tr style="background:#fffbeb"><th style="padding:3px 6px;text-align:left;border:1px solid #fde68a"><?= htmlspecialchars($t('test_case')) ?></th><th style="padding:3px 6px;text-align:left;border:1px solid #fde68a"><?= htmlspecialchars($t('description')) ?></th></tr></thead>
     <tbody>
       <?php foreach ($tcPending as $tcp): ?>
       <tr><td style="padding:3px 6px;border:1px solid #e5e7eb;font-weight:600"><?= htmlspecialchars($tcp['test_name'] ?? '#'.$tcp['id']) ?></td><td style="padding:3px 6px;border:1px solid #e5e7eb;color:#6b7280"><?= htmlspecialchars(substr($tcp['test_desc']??'',0,80)) ?></td></tr>
@@ -481,19 +481,19 @@ $tCycles  = $td['cycles'] ?? [];
     </tbody>
   </table>
 </div>
-<?php else: ?><div class="section" style="background:#f0fdf4;padding:8px;border-radius:4px;font-size:9px;color:#15803d">✓ Alle Tests ausgeführt.</div><?php endif; ?>
+<?php else: ?><div class="section" style="background:#f0fdf4;padding:8px;border-radius:4px;font-size:9px;color:#15803d"><?= htmlspecialchars($t('all_tests_executed')) ?></div><?php endif; ?>
 
 <?php elseif ($btype === 'test_cycle_entries'): ?>
 <?php $td4 = $data['testData'] ?? []; $tcLinked = $td4['linkedEntries'] ?? []; ?>
 <?php if ($tcLinked): ?>
 <div class="section no-break">
-  <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Verknüpfte Einträge ('.count($tcLinked).')') ?></div>
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: ($t('linked_entries').' ('.count($tcLinked).')')) ?></div>
   <table style="width:100%;border-collapse:collapse;font-size:8px">
     <thead><tr style="background:#f3f4f6">
-      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb">Eintrag</th>
-      <th style="padding:3px 6px;border:1px solid #e5e7eb">Status</th>
-      <th style="padding:3px 6px;border:1px solid #e5e7eb">Prio</th>
-      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb">Test Cases</th>
+      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb"><?= htmlspecialchars($t('entry')) ?></th>
+      <th style="padding:3px 6px;border:1px solid #e5e7eb"><?= htmlspecialchars($t('status_label')) ?></th>
+      <th style="padding:3px 6px;border:1px solid #e5e7eb"><?= htmlspecialchars($t('prio')) ?></th>
+      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb"><?= htmlspecialchars($t('test_cases')) ?></th>
     </tr></thead>
     <tbody>
       <?php foreach ($tcLinked as $tcle): ?>
@@ -507,21 +507,21 @@ $tCycles  = $td['cycles'] ?? [];
     </tbody>
   </table>
 </div>
-<?php else: ?><div class="section" style="background:#f9fafb;padding:8px;border-radius:4px;font-size:9px;color:#6b7280">Keine verknüpften Einträge.</div><?php endif; ?>
+<?php else: ?><div class="section" style="background:#f9fafb;padding:8px;border-radius:4px;font-size:9px;color:#6b7280"><?= htmlspecialchars($t('no_linked_entries')) ?></div><?php endif; ?>
 
 <?php elseif ($btype === 'test_cycle_bugs'): ?>
 <?php $td5 = $data['testData'] ?? []; $tcBugs = $td5['bugs'] ?? []; $tcJiraBase = rtrim(appSetting('jira_url') ?: '', '/'); ?>
 <?php if ($tcBugs): ?>
 <div class="section no-break">
-  <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Verknüpfte Bugs ('.count($tcBugs).')') ?></div>
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: ($t('linked_bugs').' ('.count($tcBugs).')')) ?></div>
   <table style="width:100%;border-collapse:collapse;font-size:8px">
     <thead><tr style="background:#f3f4f6">
-      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb">Bug</th>
-      <th style="padding:3px 6px;border:1px solid #e5e7eb">Status</th>
-      <th style="padding:3px 6px;border:1px solid #e5e7eb">Prio</th>
-      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb">Test Case</th>
-      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb">Test Run</th>
-      <th style="padding:3px 6px;border:1px solid #e5e7eb">Erstellt</th>
+      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb"><?= htmlspecialchars($t('bug')) ?></th>
+      <th style="padding:3px 6px;border:1px solid #e5e7eb"><?= htmlspecialchars($t('status_label')) ?></th>
+      <th style="padding:3px 6px;border:1px solid #e5e7eb"><?= htmlspecialchars($t('prio')) ?></th>
+      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb"><?= htmlspecialchars($t('test_case')) ?></th>
+      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb"><?= htmlspecialchars($t('test_run')) ?></th>
+      <th style="padding:3px 6px;border:1px solid #e5e7eb"><?= htmlspecialchars($t('created')) ?></th>
     </tr></thead>
     <tbody>
       <?php foreach ($tcBugs as $bug): ?>
@@ -542,7 +542,7 @@ $tCycles  = $td['cycles'] ?? [];
     </tbody>
   </table>
 </div>
-<?php else: ?><div class="section" style="background:#f0fdf4;padding:8px;border-radius:4px;font-size:9px;color:#15803d">✓ Keine Bugs verknüpft.</div><?php endif; ?>
+<?php else: ?><div class="section" style="background:#f0fdf4;padding:8px;border-radius:4px;font-size:9px;color:#15803d"><?= htmlspecialchars($t('no_bugs_linked')) ?></div><?php endif; ?>
 
 <?php elseif ($btype === 'test_overview'): ?>
 <?php
@@ -563,22 +563,22 @@ foreach ($tovItems as $it) {
     if ($cid && isset($tovGrouped[$cid])) { $tovGrouped[$cid]['items'][] = $it; }
     elseif ($tovFilter === '') { $tovUncat[] = $it; }
 }
-if ($tovUncat) $tovGrouped['none'] = ['cat' => ['id' => 'none', 'name' => 'Ohne Kategorie'], 'items' => $tovUncat];
-$tovStatusLabels = ['new'=>'Neu','pending'=>'Pending','passed'=>'Passed','failed'=>'Failed','skipped'=>'Skipped','blocked'=>'Blocked'];
+if ($tovUncat) $tovGrouped['none'] = ['cat' => ['id' => 'none', 'name' => $t('no_category')], 'items' => $tovUncat];
+$tovStatusLabels = ['new'=>$t('new'),'pending'=>'Pending','passed'=>'Passed','failed'=>'Failed','skipped'=>'Skipped','blocked'=>'Blocked'];
 $tovStatusBg     = ['new'=>'#e0e7ff','pending'=>'#e5e7eb','passed'=>'#d1fae5','failed'=>'#fee2e2','skipped'=>'#e5e7eb','blocked'=>'#fef3c7'];
 ?>
 <?php if ($tovItems): ?>
 <div class="section no-break">
-  <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Test Übersicht') ?></div>
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: $t('test_overview')) ?></div>
   <?php foreach ($tovGrouped as $tg): if (!$tg['items']) continue; ?>
   <div style="font-size:9px;font-weight:700;color:#374151;margin:6px 0 3px"><?= htmlspecialchars($tg['cat']['name']) ?> (<?= count($tg['items']) ?>)</div>
   <table style="width:100%;border-collapse:collapse;font-size:8px;margin-bottom:6px">
     <thead><tr style="background:#f3f4f6">
-      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb">Test Case</th>
-      <th style="padding:3px 6px;border:1px solid #e5e7eb">Prio</th>
-      <th style="padding:3px 6px;border:1px solid #e5e7eb">Letzter Status</th>
-      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb">Verlauf</th>
-      <th style="padding:3px 6px;border:1px solid #e5e7eb">Zuletzt ausgeführt</th>
+      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb"><?= htmlspecialchars($t('test_case')) ?></th>
+      <th style="padding:3px 6px;border:1px solid #e5e7eb"><?= htmlspecialchars($t('prio')) ?></th>
+      <th style="padding:3px 6px;border:1px solid #e5e7eb"><?= htmlspecialchars($t('last_status')) ?></th>
+      <th style="padding:3px 6px;text-align:left;border:1px solid #e5e7eb"><?= htmlspecialchars($t('history')) ?></th>
+      <th style="padding:3px 6px;border:1px solid #e5e7eb"><?= htmlspecialchars($t('last_executed')) ?></th>
     </tr></thead>
     <tbody>
       <?php foreach ($tg['items'] as $it): $ls = $it['latest_status'] ?? 'new'; ?>
@@ -602,7 +602,7 @@ $tovStatusBg     = ['new'=>'#e0e7ff','pending'=>'#e5e7eb','passed'=>'#d1fae5','f
   </table>
   <?php endforeach; ?>
 </div>
-<?php else: ?><div class="section" style="background:#f9fafb;padding:8px;border-radius:4px;font-size:9px;color:#6b7280">Keine Test Cases<?= $tovFilter !== '' ? ' in dieser Kategorie' : '' ?>.</div><?php endif; ?>
+<?php else: ?><div class="section" style="background:#f9fafb;padding:8px;border-radius:4px;font-size:9px;color:#6b7280"><?= htmlspecialchars($t('no_test_cases')) ?><?= $tovFilter !== '' ? htmlspecialchars($t('in_this_category')) : '' ?>.</div><?php endif; ?>
 <?php endif; ?>
 
 <?php if ($btype === 'page_break'): ?>
@@ -619,13 +619,13 @@ $tovStatusBg     = ['new'=>'#e0e7ff','pending'=>'#e5e7eb','passed'=>'#d1fae5','f
     <div style="flex:1">
       <div style="font-size:15px;font-weight:800"><?= htmlspecialchars($project['name']) ?></div>
       <?php if (!empty($bcfg['showStatus']) && !empty($project['status'])): ?>
-      <div style="font-size:10px;opacity:.85;margin-top:2px">Status: <?= htmlspecialchars($project['status']) ?></div>
+      <div style="font-size:10px;opacity:.85;margin-top:2px"><?= htmlspecialchars($t('status_label')) ?>: <?= htmlspecialchars($project['status']) ?></div>
       <?php endif; ?>
     </div>
     <?php if ($bcfg['showStats'] ?? true): ?>
     <div style="text-align:right">
       <div style="font-size:20px;font-weight:800;line-height:1"><?= $total ?></div>
-      <div style="font-size:9px;opacity:.8">Einträge</div>
+      <div style="font-size:9px;opacity:.8"><?= htmlspecialchars($t('entries_label')) ?></div>
     </div>
     <?php endif; ?>
   </div>
@@ -638,7 +638,7 @@ $tovStatusBg     = ['new'=>'#e0e7ff','pending'=>'#e5e7eb','passed'=>'#d1fae5','f
 
 <?php elseif ($btype === 'project_header' && !$project): ?>
 <div class="section" style="background:#fff3cd;padding:9px 12px;border-radius:5px;font-size:10px;color:#856404">
-  ⚠ Kein Projekt ausgewählt — Projektinfo-Header leer.
+  <?= htmlspecialchars($t('no_project_selected')) ?>
 </div>
 
 <?php elseif ($btype === 'summary'): ?>
@@ -659,12 +659,12 @@ $tovStatusBg     = ['new'=>'#e0e7ff','pending'=>'#e5e7eb','passed'=>'#d1fae5','f
   };
 ?>
 <div class="section no-break">
-  <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Kennzahlen') ?><?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: $t('metrics')) ?><?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">'.htmlspecialchars($t('filtered_suffix')).'</span>' : '' ?></div>
   <div class="kpi-grid" style="grid-template-columns:repeat(<?= $kpiCols ?>,1fr)">
-    <div class="kpi-card"><div class="kpi-num" style="color:<?= htmlspecialchars($kpiColor('total')) ?>"><?= $sTotal ?></div><div class="kpi-lbl">Gesamt</div></div>
-    <div class="kpi-card"><div class="kpi-num" style="color:<?= htmlspecialchars($kpiColor('open')) ?>"><?= $sOpen ?></div><div class="kpi-lbl">Offen</div></div>
-    <div class="kpi-card"><div class="kpi-num" style="color:<?= htmlspecialchars($kpiColor('done')) ?>"><?= $sDone ?></div><div class="kpi-lbl">Erledigt</div></div>
-    <div class="kpi-card"><div class="kpi-num" style="color:<?= htmlspecialchars($kpiColor('types')) ?>"><?= $sTypes ?></div><div class="kpi-lbl">Typen</div></div>
+    <div class="kpi-card"><div class="kpi-num" style="color:<?= htmlspecialchars($kpiColor('total')) ?>"><?= $sTotal ?></div><div class="kpi-lbl"><?= htmlspecialchars($t('total')) ?></div></div>
+    <div class="kpi-card"><div class="kpi-num" style="color:<?= htmlspecialchars($kpiColor('open')) ?>"><?= $sOpen ?></div><div class="kpi-lbl"><?= htmlspecialchars($t('open')) ?></div></div>
+    <div class="kpi-card"><div class="kpi-num" style="color:<?= htmlspecialchars($kpiColor('done')) ?>"><?= $sDone ?></div><div class="kpi-lbl"><?= htmlspecialchars($t('done')) ?></div></div>
+    <div class="kpi-card"><div class="kpi-num" style="color:<?= htmlspecialchars($kpiColor('types')) ?>"><?= $sTypes ?></div><div class="kpi-lbl"><?= htmlspecialchars($t('types')) ?></div></div>
   </div>
 </div>
 
@@ -672,10 +672,10 @@ $tovStatusBg     = ['new'=>'#e0e7ff','pending'=>'#e5e7eb','passed'=>'#d1fae5','f
 <?php
   $groupByProject = !empty($bcfg['groupByProject']);
   $chartSpecs = [
-      'chart_type'     => ['field'=>'type_name',        'colorField'=>'type_color', 'colorMap'=>[],              'fallback'=>$primary,   'title'=>'Nach Typ'],
-      'chart_status'   => ['field'=>'status',            'colorField'=>null,         'colorMap'=>$statusColors,   'fallback'=>'#6b7280',  'title'=>'Nach Status'],
-      'chart_priority' => ['field'=>'priority',          'colorField'=>null,         'colorMap'=>$priorityColors, 'fallback'=>'#6b7280',  'title'=>'Nach Priorität'],
-      'chart_firmware' => ['field'=>'firmware_version',  'colorField'=>null,         'colorMap'=>[],              'fallback'=>'#8b5cf6',  'title'=>'Nach Firmware'],
+      'chart_type'     => ['field'=>'type_name',        'colorField'=>'type_color', 'colorMap'=>[],              'fallback'=>$primary,   'title'=>$t('by_type')],
+      'chart_status'   => ['field'=>'status',            'colorField'=>null,         'colorMap'=>$statusColors,   'fallback'=>'#6b7280',  'title'=>$t('by_status')],
+      'chart_priority' => ['field'=>'priority',          'colorField'=>null,         'colorMap'=>$priorityColors, 'fallback'=>'#6b7280',  'title'=>$t('by_priority')],
+      'chart_firmware' => ['field'=>'firmware_version',  'colorField'=>null,         'colorMap'=>[],              'fallback'=>'#8b5cf6',  'title'=>$t('by_firmware')],
   ][$btype];
   // Only recompute from entries (capped at 1000) when we actually need a
   // subset the SQL-based global aggregates can't give us (a block filter or
@@ -700,7 +700,7 @@ $tovStatusBg     = ['new'=>'#e0e7ff','pending'=>'#e5e7eb','passed'=>'#d1fae5','f
 ?>
 <?php foreach ($groups as $grp): if (!$grp['rows']) continue; ?>
 <div class="section">
-  <div class="section-title"><?= htmlspecialchars($blkTitle ?: $chartSpecs['title']) ?><?= $grp['project'] !== '' ? ' — ' . htmlspecialchars($grp['project']) : '' ?><?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: $chartSpecs['title']) ?><?= $grp['project'] !== '' ? ' — ' . htmlspecialchars($grp['project']) : '' ?><?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">'.htmlspecialchars($t('filtered_suffix')).'</span>' : '' ?></div>
   <?php $max = max(array_column($grp['rows'],'cnt')?:[1]); ?>
   <?php foreach ($grp['rows'] as $row): ?>
   <div class="bar-row">
@@ -747,7 +747,7 @@ $tovStatusBg     = ['new'=>'#e0e7ff','pending'=>'#e5e7eb','passed'=>'#d1fae5','f
   $blkOrientClass = ($blkOrient === 'landscape') ? 'blk-landscape' : (($blkOrient === 'portrait') ? 'blk-portrait' : '');
 ?>
 <div class="section" style="page-break-before:auto;break-before:auto">
-  <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Einträge') ?><?= $multiRow ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(mehrzeilig)</span>' : '' ?><?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: $t('entries_title')) ?><?= $multiRow ? ' <span style="font-weight:400;font-size:9px;opacity:.7">'.htmlspecialchars($t('multirow_suffix')).'</span>' : '' ?><?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">'.htmlspecialchars($t('filtered_suffix')).'</span>' : '' ?></div>
   <div class="tbl-wrap">
   <table>
     <colgroup>
@@ -845,7 +845,7 @@ $tovStatusBg     = ['new'=>'#e0e7ff','pending'=>'#e5e7eb','passed'=>'#d1fae5','f
   </table>
   </div>
   <?php if (count($blkEntries) > $limit): ?>
-  <p style="font-size:9px;color:#9ca3af;margin-top:4px">… und <?= count($blkEntries)-$limit ?> weitere Einträge</p>
+  <p style="font-size:9px;color:#9ca3af;margin-top:4px">… <?= htmlspecialchars(sprintf($t('and_more_entries'), count($blkEntries)-$limit)) ?></p>
   <?php endif; ?>
 </div>
 
@@ -861,12 +861,12 @@ $tovStatusBg     = ['new'=>'#e0e7ff','pending'=>'#e5e7eb','passed'=>'#d1fae5','f
   $top = array_slice($sorted, 0, $lim);
 ?>
 <div class="section">
-  <div class="section-title"><?= htmlspecialchars($blkTitle ?: ('Top ' . $lim . ' Issues')) ?><?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: sprintf($t('top_issues'), $lim)) ?><?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">'.htmlspecialchars($t('filtered_suffix')).'</span>' : '' ?></div>
   <table style="table-layout:auto">
     <thead><tr>
-      <th style="width:24px">#</th><th>Titel</th>
-      <th style="width:70px">Priorität</th><th style="width:70px">Status</th>
-      <th style="width:80px">Typ</th><th style="width:70px">Datum</th>
+      <th style="width:24px">#</th><th><?= htmlspecialchars($colLabels['title']) ?></th>
+      <th style="width:70px"><?= htmlspecialchars($colLabels['priority']) ?></th><th style="width:70px"><?= htmlspecialchars($colLabels['status']) ?></th>
+      <th style="width:80px"><?= htmlspecialchars($colLabels['type_name']) ?></th><th style="width:70px"><?= htmlspecialchars($colLabels['entry_date']) ?></th>
     </tr></thead>
     <tbody>
     <?php foreach ($top as $i => $e): ?>
@@ -876,7 +876,7 @@ $tovStatusBg     = ['new'=>'#e0e7ff','pending'=>'#e5e7eb','passed'=>'#d1fae5','f
       <td class="wrap">
         <strong><?= htmlspecialchars($e['title']) ?></strong>
         <?php if (!empty($e['epic_title'])): ?>
-        <div class="tbl-row-sub">Epic: <?= htmlspecialchars($e['epic_title']) ?></div>
+        <div class="tbl-row-sub"><?= htmlspecialchars($t('epic')) ?>: <?= htmlspecialchars($e['epic_title']) ?></div>
         <?php endif; ?>
       </td>
       <td><span class="badge-p" style="background:<?= $pc ?>"><?= htmlspecialchars($e['priority']??'–') ?></span></td>
@@ -891,7 +891,7 @@ $tovStatusBg     = ['new'=>'#e0e7ff','pending'=>'#e5e7eb','passed'=>'#d1fae5','f
 
 <?php elseif ($btype === 'timeline'): ?>
 <div class="section">
-  <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Timeline') ?><?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: $t('timeline')) ?><?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">'.htmlspecialchars($t('filtered_suffix')).'</span>' : '' ?></div>
   <?php
     $grouped = []; foreach ($blkEntries as $e) $grouped[$e['entry_date']][] = $e;
     krsort($grouped); $shown = 0; $maxTl = (int)($bcfg['limit'] ?? 50);
@@ -943,28 +943,28 @@ $tovStatusBg     = ['new'=>'#e0e7ff','pending'=>'#e5e7eb','passed'=>'#d1fae5','f
   $rdColor = fn($d) => $d['diff'] > 0 ? '#ef4444' : ($d['diff'] < 0 ? '#22c55e' : '#6b7280');
 ?>
 <div class="section no-break">
-  <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Vergleich zum Vorzeitraum') ?></div>
-  <div style="font-size:9px;color:#9ca3af;margin-bottom:6px">Vorzeitraum: <?= htmlspecialchars($prevPeriod['from']) ?> – <?= htmlspecialchars($prevPeriod['to']) ?></div>
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: $t('compare_prev_period')) ?></div>
+  <div style="font-size:9px;color:#9ca3af;margin-bottom:6px"><?= htmlspecialchars($t('prev_period')) ?>: <?= htmlspecialchars($prevPeriod['from']) ?> – <?= htmlspecialchars($prevPeriod['to']) ?></div>
   <div class="kpi-grid" style="grid-template-columns:repeat(2,1fr)">
     <div class="kpi-card">
       <div class="kpi-num"><?= $curTotal ?></div>
-      <div class="kpi-lbl">Gesamt</div>
+      <div class="kpi-lbl"><?= htmlspecialchars($t('total')) ?></div>
       <div style="font-size:10px;font-weight:700;color:<?= $rdColor($dTotal) ?>;margin-top:3px">
-        <?= $rdArrow($dTotal) ?> <?= $dTotal['diff'] >= 0 ? '+' : '' ?><?= $dTotal['diff'] ?> (<?= $dTotal['pct'] >= 0 ? '+' : '' ?><?= $dTotal['pct'] ?>%) ggü. <?= $prevPeriod['total'] ?>
+        <?= $rdArrow($dTotal) ?> <?= $dTotal['diff'] >= 0 ? '+' : '' ?><?= $dTotal['diff'] ?> (<?= $dTotal['pct'] >= 0 ? '+' : '' ?><?= $dTotal['pct'] ?>%) <?= htmlspecialchars($t('vs')) ?> <?= $prevPeriod['total'] ?>
       </div>
     </div>
     <div class="kpi-card">
       <div class="kpi-num"><?= $curOpen ?></div>
-      <div class="kpi-lbl">Offen</div>
+      <div class="kpi-lbl"><?= htmlspecialchars($t('open')) ?></div>
       <div style="font-size:10px;font-weight:700;color:<?= $rdColor($dOpen) ?>;margin-top:3px">
-        <?= $rdArrow($dOpen) ?> <?= $dOpen['diff'] >= 0 ? '+' : '' ?><?= $dOpen['diff'] ?> (<?= $dOpen['pct'] >= 0 ? '+' : '' ?><?= $dOpen['pct'] ?>%) ggü. <?= $prevPeriod['open'] ?>
+        <?= $rdArrow($dOpen) ?> <?= $dOpen['diff'] >= 0 ? '+' : '' ?><?= $dOpen['diff'] ?> (<?= $dOpen['pct'] >= 0 ? '+' : '' ?><?= $dOpen['pct'] ?>%) <?= htmlspecialchars($t('vs')) ?> <?= $prevPeriod['open'] ?>
       </div>
     </div>
   </div>
 </div>
 <?php else: ?>
 <div class="section" style="background:#fff3cd;padding:9px 12px;border-radius:5px;font-size:10px;color:#856404">
-  ⚠ Vergleichs-Block braucht einen konkreten Zeitraum (Datum von/bis) im Bericht.
+  <?= htmlspecialchars($t('compare_needs_range')) ?>
 </div>
 <?php endif; ?>
 
@@ -988,7 +988,7 @@ $tovStatusBg     = ['new'=>'#e0e7ff','pending'=>'#e5e7eb','passed'=>'#d1fae5','f
 ?>
 <?php if ($trendRows): ?>
 <div class="section">
-  <div class="section-title"><?= htmlspecialchars($blkTitle ?: 'Verlauf (pro Woche)') ?><?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">(gefiltert)</span>' : '' ?></div>
+  <div class="section-title"><?= htmlspecialchars($blkTitle ?: $t('trend_weekly')) ?><?= $blkFiltered ? ' <span style="font-weight:400;font-size:9px;opacity:.7">'.htmlspecialchars($t('filtered_suffix')).'</span>' : '' ?></div>
   <?php
     $tw = 600; $th = 110; $pad = 8;
     $maxCnt = max(array_column($trendRows, 'cnt') ?: [1]);
@@ -1027,7 +1027,7 @@ $tovStatusBg     = ['new'=>'#e0e7ff','pending'=>'#e5e7eb','passed'=>'#d1fae5','f
 <?php if (!empty($footer['text']) || !empty($footer['showPage'])): ?>
 <div class="rpt-footer">
   <span><?= htmlspecialchars($footer['text'] ?? '') ?></span>
-  <?php if (!empty($footer['showPage'])): ?><span>Seite 1</span><?php endif; ?>
+  <?php if (!empty($footer['showPage'])): ?><span><?= htmlspecialchars($t('page')) ?> 1</span><?php endif; ?>
 </div>
 <?php endif; ?>
 
