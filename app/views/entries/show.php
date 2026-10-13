@@ -22,14 +22,14 @@
 <div class="alert alert-secondary d-flex align-items-center gap-3 mb-3 py-2">
   <i class="bi bi-diagram-2 fs-5 flex-shrink-0"></i>
   <div class="small">
-    <strong>Sub-Ticket von:</strong>
+    <strong>Sub-Ticket of:</strong>
     <a href="<?= url('entries/'.$parentEntry['id']) ?>" class="alert-link ms-1">
       #<?= $parentEntry['id'] ?> <?= e(mb_substr($parentEntry['title'],0,60)) ?>
     </a>
     <?php if (Auth::canEdit('entries')): ?>
     <button class="btn btn-sm btn-outline-secondary ms-2 py-0 px-2" style="font-size:.72rem"
-            onclick="unsetParent('<?= e(Auth::csrfToken()) ?>')" title="Verknüpfung aufheben">
-      <i class="bi bi-x-lg"></i> Trennen
+            onclick="unsetParent('<?= e(Auth::csrfToken()) ?>')" title="Remove link">
+      <i class="bi bi-x-lg"></i> Unlink
     </button>
     <?php endif; ?>
   </div>
@@ -39,10 +39,10 @@
 <div class="alert alert-warning d-flex align-items-center gap-3 mb-3 py-2" role="alert">
   <i class="bi bi-arrow-right-circle-fill fs-5"></i>
   <div>
-    <strong>Dieses Ticket wurde zusammengefuhrt</strong> und ist archiviert.
+    <strong>This ticket was merged</strong> and is archived.
     <?php if ($mergedInto): ?>
-    Es wurde in <a href="<?= url('entries/'.$mergedInto['id']) ?>" class="alert-link">
-      #<?= $mergedInto['id'] ?> <?= e(mb_substr($mergedInto['title'],0,50)) ?></a> eingebunden.
+    It was merged into <a href="<?= url('entries/'.$mergedInto['id']) ?>" class="alert-link">
+      #<?= $mergedInto['id'] ?> <?= e(mb_substr($mergedInto['title'],0,50)) ?></a>.
     <?php endif; ?>
   </div>
 </div>
@@ -139,7 +139,7 @@
     <form method="POST" action="<?= url('entries/'.$entry['id'].'/toggle-report-relevant') ?>" class="d-inline">
       <input type="hidden" name="_csrf" value="<?= Auth::csrfToken() ?>">
       <button type="submit" class="btn btn-sm <?= !empty($entry['is_report_relevant']) ? 'btn-success' : 'btn-outline-secondary' ?>"
-              title="<?= !empty($entry['is_report_relevant']) ? 'Relevant for Reporting — klicken zum Entfernen' : 'Nicht relevant — klicken zum Markieren' ?>">
+              title="<?= !empty($entry['is_report_relevant']) ? 'Relevant for Reporting — click to remove' : 'Not relevant — click to mark' ?>">
         <i class="bi bi-bar-chart-fill me-1"></i><?= !empty($entry['is_report_relevant']) ? 'Report ✓' : 'Report' ?>
       </button>
     </form>
@@ -150,18 +150,18 @@
       <i class="bi bi-pencil me-1"></i>Edit
     </a>
     <?php if (Auth::canEdit('entries') && empty($entry['is_merged'])): ?>
-    <button class="btn btn-outline-warning btn-sm" onclick="openMergeModal()" title="Tickets zusammenfuhren">
+    <button class="btn btn-outline-warning btn-sm" onclick="openMergeModal()" title="Merge tickets">
       <i class="bi bi-arrow-right-circle me-1"></i>Merge
     </button>
     <button class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#subTicketModal"
-            title="Als Sub-Ticket verknupfen">
+            title="Link as sub-ticket">
       <i class="bi bi-diagram-2 me-1"></i>Sub-Ticket
     </button>
     <?php if (Auth::canEdit('entries') || Auth::canOwn('entries')): ?>
     <a href="<?= url('entries/create') ?>?parent_id=<?= $entry['id'] ?>&project_id=<?= $entry['project_id'] ?>"
        class="btn btn-outline-success btn-sm"
-       title="Neuen Sub-Entry zu diesem Eintrag erstellen">
-      <i class="bi bi-plus-circle me-1"></i>Sub-Entry erstellen
+       title="Create a new sub-entry for this entry">
+      <i class="bi bi-plus-circle me-1"></i>Create Sub-Entry
     </a>
     <?php endif; ?>
     <button class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#epicModal"
@@ -172,14 +172,14 @@
     <?php if (Auth::canEdit('eight_d') || Auth::canOwn('eight_d') || Auth::isAdmin()): ?>
     <?php if ($linkedEightD): ?>
     <?php foreach ($linkedEightD as $ed): ?>
-    <a href="<?= url('8d/' . $ed['id']) ?>" class="btn btn-outline-warning btn-sm" title="8D-Bericht öffnen">
+    <a href="<?= url('8d/' . $ed['id']) ?>" class="btn btn-outline-warning btn-sm" title="Open 8D report">
       <i class="bi bi-diagram-3 me-1"></i><?= e($ed['reference']) ?>
     </a>
     <?php endforeach; ?>
     <?php else: ?>
     <button type="button" class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#eightDModal"
-            title="8D-Bericht zu diesem Eintrag erstellen">
-      <i class="bi bi-diagram-3 me-1"></i>8D-Bericht
+            title="Create 8D report for this entry">
+      <i class="bi bi-diagram-3 me-1"></i>8D Report
     </button>
     <?php endif; ?>
     <?php endif; ?>
@@ -223,27 +223,27 @@
 <div class="alert alert-primary d-flex align-items-center gap-3 py-2 mb-3">
   <i class="bi bi-arrow-repeat fs-5 flex-shrink-0"></i>
   <div class="flex-grow-1 small">
-    <strong>Live-Sync-Quelle hat Änderungen</strong>, die noch nicht übernommen wurden.
+    <strong>Live-Sync source has changes</strong> that have not been applied yet.
   </div>
   <a href="<?= url('admin/sync-review') ?>" class="btn btn-primary btn-sm text-nowrap">
-    <i class="bi bi-eye me-1"></i>Änderungen ansehen
+    <i class="bi bi-eye me-1"></i>View changes
   </a>
 </div>
 <?php else: ?>
 <div class="d-flex align-items-center gap-2 mb-3">
   <button type="button" class="btn btn-outline-secondary btn-sm" id="liveSyncCheckBtn"
           onclick="liveSyncCheckNow(<?= (int)$entry['id'] ?>, this)">
-    <i class="bi bi-arrow-repeat me-1"></i>Auf Änderungen von der Quelle prüfen
+    <i class="bi bi-arrow-repeat me-1"></i>Check source for changes
   </button>
   <?php if (!empty($entry['live_sync_checked_at'])): ?>
-  <small class="text-muted">zuletzt geprüft: <?= formatDate($entry['live_sync_checked_at'], 'd.m.Y H:i') ?></small>
+  <small class="text-muted">last checked: <?= formatDate($entry['live_sync_checked_at'], 'd.m.Y H:i') ?></small>
   <?php endif; ?>
 </div>
 <script>
 function liveSyncCheckNow(id, btn) {
   const orig = btn.innerHTML;
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Prüfe…';
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Checking…';
   fetch(`<?= url('entries/') ?>${id}/live-sync/check`, {
     method: 'POST',
     body: new URLSearchParams({ _csrf: '<?= e(Auth::csrfToken()) ?>' })
@@ -254,7 +254,7 @@ function liveSyncCheckNow(id, btn) {
     if (d.has_changes) {
       location.href = '<?= url('admin/sync-review') ?>';
     } else {
-      btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Keine Änderungen';
+      btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>No Changes';
       setTimeout(() => { btn.innerHTML = orig; }, 2500);
     }
   })
@@ -2404,18 +2404,18 @@ async function runWizard() {
 <div class="modal fade" id="epicModal" tabindex="-1">
   <div class="modal-dialog"><div class="modal-content bg-dark border-secondary">
     <div class="modal-header border-secondary">
-      <h5 class="modal-title"><i class="bi bi-lightning-fill text-warning me-2"></i>Epic zuordnen</h5>
+      <h5 class="modal-title"><i class="bi bi-lightning-fill text-warning me-2"></i>Assign Epic</h5>
       <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
     </div>
     <div class="modal-body">
-      <p class="text-muted small mb-3">Ordne diesen Eintrag einem Epic zu, um ihn in der Entries-Liste unter dem Epic zu gruppieren.</p>
+      <p class="text-muted small mb-3">Assign this entry to an epic to group it under the epic in the Entries list.</p>
       <?php
       $allEpics = Database::fetchAll(
           'SELECT ep.id, ep.title, ep.color, p.name project_name FROM epics ep LEFT JOIN projects p ON p.id=ep.project_id ORDER BY ep.project_id, ep.title'
       );
       ?>
       <?php if (!$allEpics): ?>
-      <div class="text-muted small">Noch keine Epics vorhanden. <a href="<?= url('epics') ?>">Jetzt erstellen</a></div>
+      <div class="text-muted small">No epics yet. <a href="<?= url('epics') ?>">Create one now</a></div>
       <?php else: ?>
       <div class="d-flex flex-column gap-2">
         <?php foreach ($allEpics as $ep): ?>
@@ -2433,10 +2433,10 @@ async function runWizard() {
     <div class="modal-footer border-secondary justify-content-between">
       <?php if ($entryEpic): ?>
       <button class="btn btn-outline-danger btn-sm" onclick="unsetEpic('<?= e(Auth::csrfToken()) ?>')">
-        <i class="bi bi-x-lg me-1"></i>Epic entfernen
+        <i class="bi bi-x-lg me-1"></i>Remove Epic
       </button>
       <?php else: ?><span></span><?php endif; ?>
-      <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Schliessen</button>
+      <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
     </div>
   </div></div>
 </div>
@@ -2448,17 +2448,17 @@ function setEpic(epicId, csrf) {
     body: new URLSearchParams({_csrf: csrf, epic_id: epicId})
   }).then(function(r){return r.json();}).then(function(d){
     if (d.success) location.reload();
-    else alert(d.error || 'Fehler');
+    else alert(d.error || 'Error');
   });
 }
 function unsetEpic(csrf) {
-  if (!confirm('Epic-Zuordnung aufheben?')) return;
+  if (!confirm('Remove epic assignment?')) return;
   fetch('<?= url('entries/'.(int)$entry['id'].'/unset-epic') ?>', {
     method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'},
     body: new URLSearchParams({_csrf: csrf})
   }).then(function(r){return r.json();}).then(function(d){
     if (d.success) location.reload();
-    else alert(d.error || 'Fehler');
+    else alert(d.error || 'Error');
   });
 }
 </script>
@@ -2467,33 +2467,33 @@ function unsetEpic(csrf) {
 <div class="modal fade" id="subTicketModal" tabindex="-1">
   <div class="modal-dialog"><div class="modal-content bg-dark border-secondary">
     <div class="modal-header border-secondary">
-      <h5 class="modal-title"><i class="bi bi-diagram-2 me-2 text-info"></i>Als Sub-Ticket verknupfen</h5>
+      <h5 class="modal-title"><i class="bi bi-diagram-2 me-2 text-info"></i>Link as Sub-Ticket</h5>
       <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
     </div>
     <div class="modal-body">
       <p class="text-muted small mb-3">
-        Verknupfe diesen Eintrag als Sub-Ticket unter einem anderen Eintrag.
-        Der Eintrag bleibt vollstandig erhalten und sichtbar ? er wird lediglich
-        hierarchisch einem Hauptticket zugeordnet.
+        Link this entry as a sub-ticket under another entry.
+        The entry stays fully intact and visible — it is merely
+        assigned hierarchically to a main ticket.
       </p>
       <?php if ($parentEntry): ?>
       <div class="alert alert-warning small py-2">
-        Aktuell Sub-Ticket von <strong>#<?= $parentEntry['id'] ?> <?= e(mb_substr($parentEntry['title'],0,50)) ?></strong>.
-        Eine neue Verknupfung uberschreibt die bestehende.
+        Currently a sub-ticket of <strong>#<?= $parentEntry['id'] ?> <?= e(mb_substr($parentEntry['title'],0,50)) ?></strong>.
+        A new link will overwrite the existing one.
       </div>
       <?php endif; ?>
       <div class="alert alert-info py-2 small mb-3">
         <i class="bi bi-info-circle me-1"></i>
-        Tickets die bereits Sub-Tickets sind können nicht als Hauptticket gewählt werden.
-        Tickets mit vorhandenen Sub-Tickets werden entsprechend markiert.
+        Tickets that are already sub-tickets cannot be chosen as a main ticket.
+        Tickets with existing sub-tickets are marked accordingly.
       </div>
-      <label class="form-label small">Hauptticket suchen</label>
+      <label class="form-label small">Search main ticket</label>
       <input type="text" id="subTicketSearch" class="form-control mb-2"
-             placeholder="Titel, Jira-Key oder ID..." oninput="searchSubTicketParent(this.value)">
+             placeholder="Title, Jira key or ID..." oninput="searchSubTicketParent(this.value)">
       <div id="subTicketResults" style="max-height:220px;overflow-y:auto"></div>
     </div>
     <div class="modal-footer border-secondary">
-      <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Abbrechen</button>
+      <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
     </div>
   </div></div>
 </div>
@@ -2505,20 +2505,20 @@ function unsetEpic(csrf) {
       <input type="hidden" name="entry_id" value="<?= $entry['id'] ?>">
       <input type="hidden" name="project_id" value="<?= e($entry['project_id']) ?>">
       <div class="modal-header border-secondary">
-        <h5 class="modal-title"><i class="bi bi-diagram-3 me-2 text-warning"></i>8D-Bericht erstellen</h5>
+        <h5 class="modal-title"><i class="bi bi-diagram-3 me-2 text-warning"></i>Create 8D Report</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
         <p class="text-muted small mb-3">
-          Erstellt einen neuen 8D-Bericht, verknüpft mit diesem Eintrag.
+          Creates a new 8D report, linked to this entry.
         </p>
-        <label class="form-label small">Titel</label>
+        <label class="form-label small">Title</label>
         <input type="text" name="title" class="form-control" required
                value="<?= e($entry['title'] ?: 'Entry #' . $entry['id']) ?>">
       </div>
       <div class="modal-footer border-secondary">
-        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Abbrechen</button>
-        <button type="submit" class="btn btn-warning btn-sm"><i class="bi bi-plus-lg me-1"></i>Erstellen</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-warning btn-sm"><i class="bi bi-plus-lg me-1"></i>Create</button>
       </div>
     </form>
   </div></div>
@@ -2559,19 +2559,19 @@ function searchSubTicketParent(q) {
       headers: {'X-Requested-With': 'XMLHttpRequest'}
     }).then(function(r) { return r.json(); }).then(function(results) {
       if (!results.length) {
-        res.innerHTML = '<div class="text-muted small p-2">Keine Eintraege gefunden.</div>';
+        res.innerHTML = '<div class="text-muted small p-2">No entries found.</div>';
         return;
       }
       res.innerHTML = '<div class="list-group">' + results.map(function(e) {
         var isSub    = !!e.parent_id;
         var hasSubs  = e.sub_count > 0;
-        var disabled = isSub ? 'disabled title="Dieses Ticket ist bereits ein Sub-Ticket und kann nicht als Hauptticket gewählt werden"' : '';
+        var disabled = isSub ? 'disabled title="This ticket is already a sub-ticket and cannot be chosen as a main ticket"' : '';
         var rowClass = isSub
           ? 'list-group-item list-group-item-action bg-dark border-secondary py-2 text-start d-flex align-items-center gap-2 opacity-50 text-decoration-line-through'
           : 'list-group-item list-group-item-action bg-dark border-secondary py-2 text-start d-flex align-items-center gap-2';
         var icon = isSub
-          ? '<i class="bi bi-slash-circle text-danger flex-shrink-0" title="Bereits Sub-Ticket"></i>'
-          : (hasSubs ? '<i class="bi bi-diagram-2-fill text-info flex-shrink-0" title="Hat ' + e.sub_count + ' Sub-Ticket(s)"></i>'
+          ? '<i class="bi bi-slash-circle text-danger flex-shrink-0" title="Already a sub-ticket"></i>'
+          : (hasSubs ? '<i class="bi bi-diagram-2-fill text-info flex-shrink-0" title="Has ' + e.sub_count + ' sub-ticket(s)"></i>'
                      : '<i class="bi bi-diagram-2 text-secondary flex-shrink-0"></i>');
         var subBadge = isSub
           ? '<span class="badge bg-danger ms-1">Sub-Ticket</span>'
@@ -2590,7 +2590,7 @@ function searchSubTicketParent(q) {
 }
 
 function setParent(parentId, csrf) {
-  if (!confirm('Diesen Eintrag als Sub-Ticket von #' + parentId + ' festlegen?')) return;
+  if (!confirm('Set this entry as a sub-ticket of #' + parentId + '?')) return;
   fetch('<?= url('entries/' . (int)$entry['id'] . '/set-parent') ?>', {
     method: 'POST',
     headers: {'X-Requested-With': 'XMLHttpRequest'},
@@ -2600,20 +2600,20 @@ function setParent(parentId, csrf) {
       bootstrap.Modal.getInstance(document.getElementById('subTicketModal')).hide();
       location.reload();
     } else {
-      alert(d.error || 'Fehler');
+      alert(d.error || 'Error');
     }
   });
 }
 
 function unsetParent(csrf) {
-  if (!confirm('Verknupfung mit dem Hauptticket aufheben?')) return;
+  if (!confirm('Remove link to the main ticket?')) return;
   fetch('<?= url('entries/' . (int)$entry['id'] . '/unset-parent') ?>', {
     method: 'POST',
     headers: {'X-Requested-With': 'XMLHttpRequest'},
     body: new URLSearchParams({_csrf: csrf})
   }).then(function(r) { return r.json(); }).then(function(d) {
     if (d.success) location.reload();
-    else alert(d.error || 'Fehler');
+    else alert(d.error || 'Error');
   });
 }
 </script>
@@ -2623,18 +2623,18 @@ function unsetParent(csrf) {
 <div class="modal fade" id="mergeModal" tabindex="-1">
   <div class="modal-dialog modal-lg"><div class="modal-content bg-dark border-secondary">
     <div class="modal-header border-secondary">
-      <h5 class="modal-title"><i class="bi bi-arrow-right-circle me-2 text-warning"></i>Tickets zusammenfuhren</h5>
+      <h5 class="modal-title"><i class="bi bi-arrow-right-circle me-2 text-warning"></i>Merge Tickets</h5>
       <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
     </div>
     <div class="modal-body">
       <div class="alert alert-warning py-2 small mb-4">
         <i class="bi bi-info-circle me-1"></i>
-        Das sekundare Ticket wird archiviert und bleibt uber einen Link erreichbar. Inhalte, Anhange und Kommentare werden ubernommen.
+        The secondary ticket will be archived and remains reachable via a link. Content, attachments and comments will be carried over.
       </div>
       <!-- Step 1: Search -->
       <div id="mergeStep1">
-        <label class="form-label fw-semibold">Ticket suchen zum Zusammenfuhren</label>
-        <input type="text" id="mergeSearch" class="form-control mb-2" placeholder="Titel, Jira-Key oder ID..." oninput="searchMerge(this.value)">
+        <label class="form-label fw-semibold">Search for a ticket to merge</label>
+        <input type="text" id="mergeSearch" class="form-control mb-2" placeholder="Title, Jira key or ID..." oninput="searchMerge(this.value)">
         <div id="mergeResults" style="max-height:200px;overflow-y:auto"></div>
       </div>
       <!-- Step 2: Configure -->
@@ -2645,12 +2645,12 @@ function unsetParent(csrf) {
             <div class="card border-success">
               <div class="card-header border-success bg-success bg-opacity-10 py-2 d-flex align-items-center gap-2">
                 <i class="bi bi-star-fill text-success"></i>
-                <span class="fw-semibold small">Hauptticket (bleibt aktiv)</span>
+                <span class="fw-semibold small">Main Ticket (stays active)</span>
               </div>
               <div class="card-body py-2">
                 <div id="primaryEntry" class="small fw-semibold"></div>
                 <button class="btn btn-outline-secondary btn-sm mt-2 w-100" onclick="swapPrimary()">
-                  <i class="bi bi-arrow-left-right me-1"></i>Tauschen
+                  <i class="bi bi-arrow-left-right me-1"></i>Swap
                 </button>
               </div>
             </div>
@@ -2660,7 +2660,7 @@ function unsetParent(csrf) {
             <div class="card border-warning">
               <div class="card-header border-warning bg-warning bg-opacity-10 py-2 d-flex align-items-center gap-2">
                 <i class="bi bi-archive text-warning"></i>
-                <span class="fw-semibold small">Sekundares Ticket (wird archiviert)</span>
+                <span class="fw-semibold small">Secondary Ticket (will be archived)</span>
               </div>
               <div class="card-body py-2">
                 <div id="secondaryEntry" class="small fw-semibold"></div>
@@ -2671,8 +2671,8 @@ function unsetParent(csrf) {
         <!-- Field selection -->
         <div class="card mb-3">
           <div class="card-header border-secondary py-2">
-            <span class="fw-semibold small">Felder vom sekundaren Ticket ubernehmen</span>
-            <small class="text-muted ms-2">(leer lassen = Felder des Haupttickets behalten)</small>
+            <span class="fw-semibold small">Take over fields from the secondary ticket</span>
+            <small class="text-muted ms-2">(leave empty = keep main ticket's fields)</small>
           </div>
           <div class="card-body" id="mergeFieldsBody">
             <!-- Filled by JS -->
@@ -2681,9 +2681,9 @@ function unsetParent(csrf) {
       </div>
     </div>
     <div class="modal-footer border-secondary">
-      <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Abbrechen</button>
+      <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
       <button class="btn btn-warning btn-sm" id="mergeConfirmBtn" style="display:none" onclick="executeMerge('<?= e(Auth::csrfToken()) ?>')">
-        <i class="bi bi-arrow-right-circle me-1"></i>Zusammenfuhren
+        <i class="bi bi-arrow-right-circle me-1"></i>Merge
       </button>
     </div>
   </div></div>
@@ -2697,34 +2697,34 @@ var _mergeSecondaryId = null;
 var _mergeTargetData = null;
 var _mergeSourceData = <?= json_encode(['id' => (int)$entry['id'], 'title' => $entry['title'] ?? '', 'jira_issue_key' => $entry['jira_issue_key'] ?? '']) ?>;
 var _mergeFieldGroups = [
-  { group: 'Allgemein', fields: [
-    {key:'title',             label:'Titel',            appendable:false},
-    {key:'description',       label:'Beschreibung',     appendable:true},
-    {key:'priority',          label:'Prioritat',        appendable:false},
+  { group: 'General', fields: [
+    {key:'title',             label:'Title',            appendable:false},
+    {key:'description',       label:'Description',      appendable:true},
+    {key:'priority',          label:'Priority',         appendable:false},
     {key:'status',            label:'Status',           appendable:false},
-    {key:'assigned_to',       label:'Zuweisung',        appendable:false},
-    {key:'entry_type_id',     label:'Eintragstyp',      appendable:false},
-    {key:'error_category_id', label:'Kategorie',        appendable:false},
+    {key:'assigned_to',       label:'Assignment',       appendable:false},
+    {key:'entry_type_id',     label:'Entry Type',       appendable:false},
+    {key:'error_category_id', label:'Category',         appendable:false},
   ]},
-  { group: 'Beschreibung', fields: [
+  { group: 'Description', fields: [
     {key:'summary',           label:'Summary',          appendable:true},
     {key:'steps_to_reproduce',label:'Steps to Reproduce', appendable:true},
     {key:'expected_result',   label:'Expected Result',  appendable:true},
     {key:'actual_result',     label:'Actual Result',    appendable:true},
   ]},
-  { group: 'Gerat & Umgebung', fields: [
-    {key:'mower_serial',      label:'Maher Serial',     appendable:false},
+  { group: 'Device & Environment', fields: [
+    {key:'mower_serial',      label:'Mower Serial',     appendable:false},
     {key:'firmware_version',  label:'Firmware',         appendable:false},
     {key:'app_version',       label:'App Version',      appendable:false},
-    {key:'environment_id',    label:'Umgebung',         appendable:false},
-    {key:'test_area_id',      label:'Testarea',         appendable:false},
-    {key:'weather_condition', label:'Wetter',           appendable:false},
-    {key:'temperature',       label:'Temperatur',       appendable:false},
+    {key:'environment_id',    label:'Environment',      appendable:false},
+    {key:'test_area_id',      label:'Test Area',        appendable:false},
+    {key:'weather_condition', label:'Weather',          appendable:false},
+    {key:'temperature',       label:'Temperature',      appendable:false},
     {key:'gps_lat',           label:'GPS Lat',          appendable:false},
     {key:'gps_lon',           label:'GPS Lon',          appendable:false},
   ]},
-  { group: 'Anhange', fields: [
-    {key:'attachments', label:'Anhange (werden hinzugefugt)', appendable:false, special:true},
+  { group: 'Attachments', fields: [
+    {key:'attachments', label:'Attachments (will be added)', appendable:false, special:true},
   ]},
 ];
 // Flat list for compatibility
@@ -2752,7 +2752,7 @@ function searchMerge(q) {
     .then(function(r) { return r.json(); })
     .then(function(results) {
       var res = document.getElementById('mergeResults');
-      if (!results.length) { res.innerHTML = '<div class="text-muted small p-2">Keine Tickets gefunden.</div>'; return; }
+      if (!results.length) { res.innerHTML = '<div class="text-muted small p-2">No tickets found.</div>'; return; }
       // Store results for lookup by id
       window._mergeResultsMap = {};
       results.forEach(function(e) { window._mergeResultsMap[e.id] = e; });
@@ -2832,9 +2832,9 @@ function renderMergeFields() {
         modeDiv.innerHTML =
           '<div class="btn-group btn-group-sm">' +
           '<input type="radio" class="btn-check" name="mode_' + f.key + '" id="mr_' + f.key + '" value="replace" checked>' +
-          '<label class="btn btn-outline-secondary" for="mr_' + f.key + '"><i class="bi bi-arrow-repeat me-1"></i>Ersetzen</label>' +
+          '<label class="btn btn-outline-secondary" for="mr_' + f.key + '"><i class="bi bi-arrow-repeat me-1"></i>Replace</label>' +
           '<input type="radio" class="btn-check" name="mode_' + f.key + '" id="ma_' + f.key + '" value="append">' +
-          '<label class="btn btn-outline-info" for="ma_' + f.key + '"><i class="bi bi-text-paragraph me-1"></i>Anhangen</label>' +
+          '<label class="btn btn-outline-info" for="ma_' + f.key + '"><i class="bi bi-text-paragraph me-1"></i>Append</label>' +
           '</div>';
         cb.addEventListener('change', (function(md) {
           return function() { md.style.display = this.checked ? '' : 'none'; };
@@ -2842,7 +2842,7 @@ function renderMergeFields() {
         row.appendChild(modeDiv);
       } else if (!f.special) {
         var hint = document.createElement('span');
-        hint.className = 'text-muted small'; hint.textContent = 'wird ersetzt';
+        hint.className = 'text-muted small'; hint.textContent = 'will be replaced';
         row.appendChild(hint);
       }
       container.appendChild(row);
@@ -2851,8 +2851,8 @@ function renderMergeFields() {
   // Select all / None buttons
   var btns = document.createElement('div');
   btns.className = 'd-flex gap-2 mt-3';
-  btns.innerHTML = '<button class="btn btn-outline-secondary btn-sm" onclick="toggleAllMergeFields(true)">Alle ausw.</button>' +
-    '<button class="btn btn-outline-secondary btn-sm" onclick="toggleAllMergeFields(false)">Keine</button>';
+  btns.innerHTML = '<button class="btn btn-outline-secondary btn-sm" onclick="toggleAllMergeFields(true)">Select All</button>' +
+    '<button class="btn btn-outline-secondary btn-sm" onclick="toggleAllMergeFields(false)">None</button>';
   container.appendChild(btns);
 }
 
@@ -2864,7 +2864,7 @@ function toggleAllMergeFields(check) {
 }
 
 function executeMerge(csrf) {
-  if (!confirm('Ticket #' + _mergeSecondaryId + ' wird archiviert und kann nicht ruckgangig gemacht werden. Fortfahren?')) return;
+  if (!confirm('Ticket #' + _mergeSecondaryId + ' will be archived and cannot be undone. Continue?')) return;
   var body = new URLSearchParams({_csrf: csrf, target_id: _mergeTargetId, primary_id: _mergePrimaryId});
   document.querySelectorAll('input[name="merge_fields"]:checked').forEach(function(cb) {
     body.append('fields[]', cb.value);
@@ -2881,7 +2881,7 @@ function executeMerge(csrf) {
       bootstrap.Modal.getInstance(document.getElementById('mergeModal')).hide();
       location.href = '<?= url('entries/') ?>' + d.primary_id;
     } else {
-      alert(d.error || 'Fehler beim Zusammenfuhren');
+      alert(d.error || 'Error merging');
     }
   });
 }

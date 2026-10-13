@@ -84,17 +84,17 @@ $baseUrl = match($vmForView) {
     <li class="nav-item">
       <a class="nav-link <?= $entryListView === 'archived' ? 'active' : '' ?>"
          href="<?= $baseUrl ?>?<?= http_build_query(array_merge(array_diff_key($_GET, ['list'=>'']), ['list'=>'archived'])) ?>"
-         title="Zusammengeführte, Sub-Tickets und Einträge mit einem als &quot;archiviert&quot; markierten Status (Admin &gt; Settings)">
-        <i class="bi bi-archive me-1"></i>Archiviert
+         title="Merged, sub-tickets and entries with a status marked as &quot;archived&quot; (Admin &gt; Settings)">
+        <i class="bi bi-archive me-1"></i>Archived
         <?php if ($entryListView === 'archived'): ?><span class="badge bg-secondary ms-1"><?= number_format($pag['total']) ?></span><?php endif; ?>
       </a>
     </li>
   </ul>
   <?php if (!empty($childrenMap) && $entryListView === 'normal'): ?>
   <button id="globalSubToggleBtn" class="btn btn-outline-info btn-sm ms-3 flex-shrink-0"
-          onclick="toggleAllSubTickets()" title="Alle Sub-Tickets ein-/ausblenden">
+          onclick="toggleAllSubTickets()" title="Show/hide all sub-tickets">
     <i class="bi bi-diagram-2 me-1"></i>
-    <span id="globalSubToggleLabel">Sub-Tickets ausblenden</span>
+    <span id="globalSubToggleLabel">Hide Sub-Tickets</span>
   </button>
   <?php endif; ?>
 </div>
@@ -116,7 +116,7 @@ function _applyGlobalState() {
   });
   var lbl  = document.getElementById('globalSubToggleLabel');
   var gbtn = document.getElementById('globalSubToggleBtn');
-  if (lbl)  lbl.textContent = _allSubHidden ? 'Sub-Tickets einblenden' : 'Sub-Tickets ausblenden';
+  if (lbl)  lbl.textContent = _allSubHidden ? 'Show Sub-Tickets' : 'Hide Sub-Tickets';
   if (gbtn) {
     gbtn.classList.toggle('btn-outline-info',      !_allSubHidden);
     gbtn.classList.toggle('btn-outline-secondary',  _allSubHidden);
@@ -197,7 +197,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <span class="small fw-semibold text-muted">
       <i class="bi bi-funnel me-1"></i>Filter
       <?php if ($hasActiveFilter): ?>
-      <span class="badge bg-primary rounded-pill ms-1" style="font-size:.65rem">Aktiv</span>
+      <span class="badge bg-primary rounded-pill ms-1" style="font-size:.65rem">Active</span>
       <?php endif; ?>
     </span>
     <i class="bi bi-chevron-<?= $hasActiveFilter ? 'up' : 'down' ?>" id="filterChevron"></i>
@@ -869,7 +869,7 @@ $filterVal = function(string $col, array $e): string {
               <i class="bi bi-search"></i>
             </button>
             <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1"
-                    onclick="clearAllFilters()" title="Alle Filter löschen">
+                    onclick="clearAllFilters()" title="Clear all filters">
               <i class="bi bi-x-lg"></i>
             </button>
           </th>
@@ -929,7 +929,7 @@ $filterVal = function(string $col, array $e): string {
               <?php if ($hasChildren): ?>
               <button class="btn btn-outline-info btn-sm py-0 px-1 sub-toggle-btn"
                       data-parent="<?= $e['id'] ?>"
-                      title="Sub-Tickets ein-/ausblenden"
+                      title="Show/hide sub-tickets"
                       onclick="toggleSubTickets(this, <?= $e['id'] ?>)">
                 <i class="bi bi-diagram-2" style="font-size:.7rem"></i>
                 <span class="sub-toggle-count" style="font-size:.65rem"><?= count($childrenMap[$e['id']]) ?></span>
@@ -1658,7 +1658,7 @@ function updatePreset(id, name) {
       renderPresetList();
       updateActivePresetBadge(name);
     } else { alert('Fehler: ' + (d.error || 'Unbekannt')); }
-  }).catch(() => alert('Netzwerkfehler'));
+  }).catch(() => alert('Network error'));
 }
 
 function deletePreset(id, name) {
@@ -2158,7 +2158,7 @@ function renderPresetBar() {
   const bar = ensurePresetBar(); if (!bar) return;
   const presets = _serverPresets || [];
   if (!presets.length) {
-    bar.innerHTML = '<span class="text-muted small"><i class="bi bi-bookmark me-1"></i>Noch keine Presets gespeichert</span>';
+    bar.innerHTML = '<span class="text-muted small"><i class="bi bi-bookmark me-1"></i>No presets saved yet</span>';
     return;
   }
   bar.innerHTML = '<span class="text-muted small me-1"><i class="bi bi-bookmark me-1"></i>Presets:</span>' +
@@ -2209,9 +2209,9 @@ function togglePresetDefault(id) {
       _defaultPresetId = makeDefault ? id : null;
       renderPresetList();
       if (typeof showToast === 'function')
-        showToast(makeDefault ? 'Standard-Ansicht festgelegt.' : 'Standard-Ansicht entfernt.', 'success');
+        showToast(makeDefault ? 'Default view set.' : 'Default view removed.', 'success');
     } else if (typeof showToast === 'function') {
-      showToast((d && d.error) || 'Fehler beim Speichern.', 'danger');
+      showToast((d && d.error) || 'Error while saving.', 'danger');
     }
   })
   .catch(function () {});
@@ -2319,19 +2319,19 @@ $ewCols = [
   ['epic',                 'Epic',            'bi-lightning-fill'],
   ['parent_title',         'Parent Ticket',   'bi-diagram-2'],
   ['is_sub',               'Sub-Ticket',      'bi-arrow-return-right'],
-  ['entry_date',           'Datum',           'bi-calendar'],
-  ['entry_time',           'Zeit',            'bi-clock'],
-  ['title',                'Titel',           'bi-card-text'],
+  ['entry_date',           'Date',            'bi-calendar'],
+  ['entry_time',           'Time',            'bi-clock'],
+  ['title',                'Title',           'bi-card-text'],
   ['status',               'Status',          'bi-circle-fill'],
-  ['priority',             'Priorität',       'bi-exclamation-triangle'],
-  ['type_name',            'Typ',             'bi-tag'],
-  ['cat_name',             'Kategorie',       'bi-folder'],
-  ['project_name',         'Projekt',         'bi-briefcase'],
-  ['mower_serial',         'Seriennummer',    'bi-upc'],
+  ['priority',             'Priority',        'bi-exclamation-triangle'],
+  ['type_name',            'Type',            'bi-tag'],
+  ['cat_name',             'Category',        'bi-folder'],
+  ['project_name',         'Project',         'bi-briefcase'],
+  ['mower_serial',         'Serial Number',   'bi-upc'],
   ['firmware_version',     'Firmware',        'bi-cpu'],
   ['app_version',          'App Version',     'bi-phone'],
-  ['creator',              'Ersteller',       'bi-person'],
-  ['description',          'Beschreibung',    'bi-text-paragraph'],
+  ['creator',              'Creator',         'bi-person'],
+  ['description',          'Description',     'bi-text-paragraph'],
   ['tags',                 'Tags',            'bi-tags'],
   ['jira_issue_key',       'Jira Key',        'bi-bug'],
   ['jira_issue_url',       'Jira URL',        'bi-link-45deg'],
@@ -2340,8 +2340,8 @@ $ewCols = [
   ['zentao_bug_url',       'Zentao URL',      'bi-link-45deg'],
   ['zentao_status',        'Zentao Status',   'bi-circle-half'],
   ['project_status_robot', 'Robot Status',    'bi-robot'],
-  ['temperature',          'Temperatur',      'bi-thermometer'],
-  ['weather_condition',    'Wetter',          'bi-cloud'],
+  ['temperature',          'Temperature',     'bi-thermometer'],
+  ['weather_condition',    'Weather',         'bi-cloud'],
   ['gps_lat',              'GPS Lat',         'bi-geo-alt'],
   ['gps_lon',              'GPS Lon',         'bi-geo-alt-fill'],
   ['sharepoint_url',       'Sharepoint Link', 'bi-cloud-arrow-up'],
@@ -2361,14 +2361,14 @@ $ewDefault = ['entry_date','title','status','priority','type_name','cat_name','p
         <div class="d-flex align-items-center gap-2 mb-4">
           <span class="badge rounded-pill bg-primary" id="ewBadge1">1 Format</span>
           <span class="text-muted">&rsaquo;</span>
-          <span class="badge rounded-pill bg-secondary" id="ewBadge2">2 Spalten</span>
+          <span class="badge rounded-pill bg-secondary" id="ewBadge2">2 Columns</span>
           <span class="text-muted">&rsaquo;</span>
-          <span class="badge rounded-pill bg-secondary" id="ewBadge3">3 Optionen</span>
+          <span class="badge rounded-pill bg-secondary" id="ewBadge3">3 Options</span>
         </div>
 
         <!-- Step 1: Format -->
         <div id="ewStep1">
-          <p class="text-muted small mb-3">Welches Format soll exportiert werden?</p>
+          <p class="text-muted small mb-3">Which format should be exported?</p>
           <div class="row g-3">
             <?php foreach ([
               ['xlsx','Excel (.xlsx)','bi-file-earmark-spreadsheet','text-success'],
@@ -2386,16 +2386,16 @@ $ewDefault = ['entry_date','title','status','priority','type_name','cat_name','p
           </div>
         </div>
 
-        <!-- Step 2: Spalten -->
+        <!-- Step 2: Columns -->
         <div id="ewStep2" style="display:none">
           <div class="d-flex justify-content-between align-items-center mb-3">
-            <p class="text-muted small mb-0">Welche Spalten exportieren?</p>
+            <p class="text-muted small mb-0">Which columns to export?</p>
             <div class="d-flex gap-1 flex-wrap">
-              <button class="btn btn-outline-primary btn-sm py-0 px-2" onclick="ewUsePresetCols()" title="Sichtbare Spalten aus aktivem Preset übernehmen">
-                <i class="bi bi-bookmark me-1"></i>Aktuelles Preset
+              <button class="btn btn-outline-primary btn-sm py-0 px-2" onclick="ewUsePresetCols()" title="Use visible columns from active preset">
+                <i class="bi bi-bookmark me-1"></i>Current Preset
               </button>
-              <button class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="ewToggleAll(true)">Alle</button>
-              <button class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="ewToggleAll(false)">Keine</button>
+              <button class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="ewToggleAll(true)">All</button>
+              <button class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="ewToggleAll(false)">None</button>
             </div>
           </div>
           <div class="row g-2">
@@ -2414,43 +2414,43 @@ $ewDefault = ['entry_date','title','status','priority','type_name','cat_name','p
           </div>
         </div>
 
-        <!-- Step 3: Optionen -->
+        <!-- Step 3: Options -->
         <div id="ewStep3" style="display:none">
-          <p class="text-muted small mb-3">Weitere Optionen</p>
+          <p class="text-muted small mb-3">Additional Options</p>
           <div class="mb-3">
-            <label class="form-label small fw-semibold">Umfang</label>
+            <label class="form-label small fw-semibold">Scope</label>
             <div class="d-flex flex-column gap-2">
               <div class="form-check">
                 <input class="form-check-input" type="radio" name="ewScope" id="ewScopeAll" value="all" checked>
                 <label class="form-check-label" for="ewScopeAll">
-                  Alle gefilterten Einträge <span class="badge bg-secondary ms-1"><?= number_format($pag['total'] ?? 0) ?></span>
+                  All filtered entries <span class="badge bg-secondary ms-1"><?= number_format($pag['total'] ?? 0) ?></span>
                 </label>
               </div>
               <div class="form-check" id="ewScopeSelWrap" style="display:none">
                 <input class="form-check-input" type="radio" name="ewScope" id="ewScopeSel" value="selected">
                 <label class="form-check-label" for="ewScopeSel">
-                  Nur ausgewählte Einträge <span class="badge bg-secondary ms-1" id="ewSelCount"></span>
+                  Only selected entries <span class="badge bg-secondary ms-1" id="ewSelCount"></span>
                 </label>
               </div>
             </div>
           </div>
           <div class="mb-3">
-            <label class="form-label small fw-semibold" for="ewSort">Sortierung</label>
+            <label class="form-label small fw-semibold" for="ewSort">Sorting</label>
             <select class="form-select form-select-sm bg-dark text-white border-secondary" id="ewSort">
-              <option value="date_desc">Datum absteigend (neueste zuerst)</option>
-              <option value="date_asc">Datum aufsteigend</option>
-              <option value="title_asc">Titel A&ndash;Z</option>
+              <option value="date_desc">Date descending (newest first)</option>
+              <option value="date_asc">Date ascending</option>
+              <option value="title_asc">Title A&ndash;Z</option>
               <option value="status">Status</option>
             </select>
           </div>
           <div class="form-check">
             <input class="form-check-input" type="checkbox" id="ewTruncDesc" checked>
-            <label class="form-check-label small" for="ewTruncDesc">Beschreibung kürzen (max. 300 Zeichen)</label>
+            <label class="form-check-label small" for="ewTruncDesc">Truncate description (max. 300 characters)</label>
           </div>
           <div class="form-check mt-2" id="ewImagesRow">
             <input class="form-check-input" type="checkbox" id="ewIncludeImages" checked>
             <label class="form-check-label small" for="ewIncludeImages">
-              <i class="bi bi-image me-1"></i>Bilder einbetten (nur XLSX)
+              <i class="bi bi-image me-1"></i>Embed images (XLSX only)
             </label>
           </div>
         </div>
@@ -2458,14 +2458,14 @@ $ewDefault = ['entry_date','title','status','priority','type_name','cat_name','p
 
       <div class="modal-footer border-secondary">
         <button class="btn btn-outline-secondary" id="ewBtnBack" style="display:none" onclick="ewPrev()">
-          <i class="bi bi-chevron-left me-1"></i>Zurück
+          <i class="bi bi-chevron-left me-1"></i>Back
         </button>
-        <button class="btn btn-secondary ms-auto" data-bs-dismiss="modal">Abbrechen</button>
+        <button class="btn btn-secondary ms-auto" data-bs-dismiss="modal">Cancel</button>
         <button class="btn btn-primary" id="ewBtnNext" onclick="ewNext()">
-          Weiter <i class="bi bi-chevron-right ms-1"></i>
+          Next <i class="bi bi-chevron-right ms-1"></i>
         </button>
         <button class="btn btn-success" id="ewBtnExport" style="display:none" onclick="ewExport()">
-          <i class="bi bi-download me-1"></i>Exportieren
+          <i class="bi bi-download me-1"></i>Export
         </button>
       </div>
     </div>
@@ -2525,10 +2525,10 @@ $ewDefault = ['entry_date','title','status','priority','type_name','cat_name','p
   }
 
   window.ewNext = function() {
-    if (_ewStep === 1 && !_ewFmt) { alert('Bitte ein Format wählen.'); return; }
+    if (_ewStep === 1 && !_ewFmt) { alert('Please select a format.'); return; }
     if (_ewStep === 2) {
       var any = document.querySelectorAll('.ew-col-cb:checked').length;
-      if (!any) { alert('Bitte mindestens eine Spalte wählen.'); return; }
+      if (!any) { alert('Please select at least one column.'); return; }
     }
     _ewStep = Math.min(3, _ewStep + 1);
     ewShowStep(_ewStep);
@@ -2545,7 +2545,7 @@ $ewDefault = ['entry_date','title','status','priority','type_name','cat_name','p
     document.querySelectorAll('#tblSortRow th[data-col]').forEach(function(th) {
       if (th.offsetParent !== null) visibleCols.push(th.dataset.col);
     });
-    if (!visibleCols.length) { alert('Kein aktives Preset erkannt.'); return; }
+    if (!visibleCols.length) { alert('No active preset detected.'); return; }
     // Map table col keys to export col keys (they may differ slightly)
     var colMap = { 'type': 'type_name', 'category': 'cat_name', 'project': 'project_name',
                    'creator': 'creator', 'jira': 'jira_issue_key', 'zentao': 'zentao_bug_id',

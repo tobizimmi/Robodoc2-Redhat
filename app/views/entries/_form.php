@@ -81,7 +81,7 @@ $isTestEntry  = $isTestEntry ?? (!empty($trTypeIds2) && in_array((int)($data['en
     <?php if (!empty($epics) || !empty($parents)): ?>
     <div class="card mb-3">
       <div class="card-header border-secondary fw-semibold small">
-        <i class="bi bi-diagram-2 me-2"></i>Verknüpfung
+        <i class="bi bi-diagram-2 me-2"></i>Linking
       </div>
       <div class="card-body">
         <div class="row g-3">
@@ -92,7 +92,7 @@ $isTestEntry  = $isTestEntry ?? (!empty($trTypeIds2) && in_array((int)($data['en
               <span class="text-muted fw-normal small">(optional)</span>
             </label>
             <select name="epic_id" class="form-select" id="epicSelect">
-              <option value="">— Kein Epic —</option>
+              <option value="">— No Epic —</option>
               <?php foreach ($epics as $epic): ?>
               <option value="<?= $epic['id'] ?>"
                       data-color="<?= e($epic['color'] ?? '#888') ?>"
@@ -107,10 +107,10 @@ $isTestEntry  = $isTestEntry ?? (!empty($trTypeIds2) && in_array((int)($data['en
           <div class="col-md-6">
             <label class="form-label d-flex align-items-center gap-2">
               <i class="bi bi-diagram-3 text-info"></i>Parent Entry
-              <span class="text-muted fw-normal small">(wird dann Sub-Entry)</span>
+              <span class="text-muted fw-normal small">(becomes a sub-entry)</span>
             </label>
             <select name="parent_id" class="form-select" id="parentSelect">
-              <option value="">— Kein Parent —</option>
+              <option value="">— No Parent —</option>
               <?php
                 $currentProject = (int)($data['project_id'] ?? 0);
               ?>
@@ -122,7 +122,7 @@ $isTestEntry  = $isTestEntry ?? (!empty($trTypeIds2) && in_array((int)($data['en
               </option>
               <?php endforeach; ?>
             </select>
-            <div class="form-text">Wähle einen bestehenden Eintrag als übergeordneten Eintrag.</div>
+            <div class="form-text">Select an existing entry as the parent entry.</div>
           </div>
           <?php endif; ?>
         </div>
