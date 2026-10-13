@@ -402,7 +402,7 @@ class EntryController {
             'childrenMap', 'entryListView', 'epicFilter', 'epicGroups', 'colFiltersActive', 'totalUnfiltered'
         ) + ['title' => match($viewMode) {
             'test-results'  => 'Test Results',
-            'other-entries' => 'Sonstige Einträge',
+            'other-entries' => 'Other Entries',
             default         => 'Entries',
         }, 'vmForView' => $viewMode, 'preFilterIds' => $preFilterIds]);
     }
@@ -601,7 +601,7 @@ class EntryController {
     public static function create(): void {
         Auth::require();
         if (!Auth::canEdit('entries') && !Auth::canOwn('entries')) {
-            abort(403, 'Keine Berechtigung zum Erstellen von Einträgen.');
+            abort(403, 'No permission to create entries.');
         }
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Auth::verifyCsrf();
@@ -756,7 +756,7 @@ class EntryController {
             }
 
             Audit::log('entry_created', 'entry', (int)$id, $data['title'] ?? '');
-            flash('success', 'Eintrag erstellt.');
+            flash('success', 'Entry created.');
             if (!empty($_SERVER['HTTP_X_REQUESTED_WITH'])) {
                 json(['redirect' => url('entries/' . $id)]);
             }
@@ -929,7 +929,7 @@ class EntryController {
             }
 
             Audit::log('entry_updated', 'entry', (int)$id);
-            flash('success', 'Eintrag aktualisiert.');
+            flash('success', 'Entry updated.');
             if (!empty($_SERVER['HTTP_X_REQUESTED_WITH'])) {
                 json(['redirect' => url('entries/' . $id)]);
             }
@@ -1218,7 +1218,7 @@ View::render('entries/edit', compact('entry','data','projects','entryTypes','cat
         Auth::verifyCsrf();
         $entry = self::findOr404((int)$id);
         $body  = trim($_POST['body'] ?? '');
-        if (!$body) { flash('error', 'Kommentar darf nicht leer sein.'); redirect('/entries/' . $id); }
+        if (!$body) { flash('error', 'Comment must not be empty.'); redirect('/entries/' . $id); }
         $cid = Database::insert(
             'INSERT INTO entry_comments (entry_id, user_id, body) VALUES (?, ?, ?)',
             [(int)$id, Auth::id(), $body]
@@ -1409,7 +1409,7 @@ View::render('entries/edit', compact('entry','data','projects','entryTypes','cat
         header('Content-Type: application/json');
         Auth::verifyCsrf();
         $linkEntry = Database::fetchOne('SELECT id, created_by, assigned_to FROM entries WHERE id=?', [(int)$id]);
-        if ($linkEntry && !Auth::canEditEntry($linkEntry)) { http_response_code(403); echo json_encode(['error' => 'Keine Berechtigung']); exit; }
+        if ($linkEntry && !Auth::canEditEntry($linkEntry)) { http_response_code(403); echo json_encode(['error' => 'No permission']); exit; }
         $toId = (int)($_POST['to_entry_id'] ?? 0);
         if (!$toId || $toId == (int)$id) { echo json_encode(['error' => 'Invalid entry']); exit; }
         if (!Database::fetchOne('SELECT id FROM entries WHERE id=?', [$toId])) {
@@ -1516,7 +1516,7 @@ View::render('entries/edit', compact('entry','data','projects','entryTypes','cat
                 [$id]
             );
         }
-        if (!$e) abort(404, 'Eintrag nicht gefunden');
+        if (!$e) abort(404, 'Entry not found');
         return $e;
     }
 
@@ -1535,11 +1535,11 @@ View::render('entries/edit', compact('entry','data','projects','entryTypes','cat
         $ownIds = $access['own'];
 
         if (!in_array($pid, $allIds, true) && !in_array($pid, $ownIds, true)) {
-            abort(403, 'Kein Zugriff auf dieses Projekt');
+            abort(403, 'No access to this project');
         }
 
         if (!in_array($pid, $allIds, true) && (int)$entry['created_by'] !== Auth::id()) {
-            abort(403, 'Nur eigene Einträge sichtbar');
+            abort(403, 'Only own entries are visible');
         }
     }
 
