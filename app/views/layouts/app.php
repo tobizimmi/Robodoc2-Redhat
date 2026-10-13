@@ -62,14 +62,14 @@
       <?php if (Auth::canView('quick_capture')): ?>
       <li class="nav-item">
         <a href="<?= url('test-customers') ?>" class="nav-link text-white <?= isActive('test-customers') ?>">
-          <i class="bi bi-people me-2"></i>Testkunden
+          <i class="bi bi-people me-2"></i>Test Customers
         </a>
       </li>
       <?php endif; ?>
       <?php if (Auth::canView('eight_d')): ?>
       <li class="nav-item">
         <a href="<?= url('8d') ?>" class="nav-link text-white <?= isActive('8d') ?>">
-          <i class="bi bi-diagram-3-fill me-2"></i>8D-Berichte
+          <i class="bi bi-diagram-3-fill me-2"></i>8D Reports
         </a>
       </li>
       <?php endif; ?>
@@ -149,7 +149,7 @@
       </li>
       <li class="nav-item">
         <a href="<?= url('test-overview') ?>" class="nav-link text-white <?= isActive('test-overview') ?>">
-          <i class="bi bi-table me-2"></i>Test Übersicht
+          <i class="bi bi-table me-2"></i>Test Overview
         </a>
       </li>
       <?php endif; ?>
@@ -434,13 +434,13 @@
       <?php if (!Auth::isAdmin() && !Auth::hasAnyAccess()): ?>
       <div class="d-flex flex-column align-items-center justify-content-center text-center py-5" style="min-height:50vh">
         <div class="mb-4" style="font-size:3rem;opacity:.3"><i class="bi bi-shield-lock"></i></div>
-        <h4 class="mb-2">Kein Zugriff</h4>
+        <h4 class="mb-2">No Access</h4>
         <p class="text-muted mb-4" style="max-width:420px">
-          Deinem Account sind noch keine Berechtigungen zugewiesen.<br>
-          Bitte wende dich an einen Administrator.
+          Your account has not been assigned any permissions yet.<br>
+          Please contact an administrator.
         </p>
         <a href="<?= url('dashboard') ?>" class="btn btn-outline-secondary btn-sm">
-          <i class="bi bi-house me-1"></i>Zum Dashboard
+          <i class="bi bi-house me-1"></i>Go to Dashboard
         </a>
       </div>
       <?php else: ?>
