@@ -1,10 +1,10 @@
 <?php
-$tabs = ['pending' => 'Offen', 'approved' => 'Freigegeben', 'rejected' => 'Abgelehnt'];
+$tabs = ['pending' => 'Open', 'approved' => 'Approved', 'rejected' => 'Rejected'];
 ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0"><i class="bi bi-inbox me-2"></i>Quick Captures</h3>
     <a href="<?= url('quick-capture') ?>" target="_blank" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-box-arrow-up-right me-1"></i>Öffentliches Formular
+        <i class="bi bi-box-arrow-up-right me-1"></i>Public Form
     </a>
 </div>
 
@@ -25,18 +25,18 @@ $tabs = ['pending' => 'Offen', 'approved' => 'Freigegeben', 'rejected' => 'Abgel
 <?php if (!$captures): ?>
     <div class="text-center text-muted py-5">
         <i class="bi bi-inbox" style="font-size:2.5rem"></i>
-        <p class="mt-2">Keine Einträge in dieser Ansicht.</p>
+        <p class="mt-2">No entries in this view.</p>
     </div>
 <?php else: ?>
     <div class="table-responsive">
         <table class="table table-hover align-middle">
             <thead>
                 <tr>
-                    <th>Titel</th>
-                    <th>Projekt / Bezug</th>
-                    <th>Absender</th>
-                    <th>Anhänge</th>
-                    <th>Eingegangen</th>
+                    <th>Title</th>
+                    <th>Project / Reference</th>
+                    <th>Sender</th>
+                    <th>Attachments</th>
+                    <th>Received</th>
                     <th></th>
                 </tr>
             </thead>
@@ -57,15 +57,15 @@ $tabs = ['pending' => 'Offen', 'approved' => 'Freigegeben', 'rejected' => 'Abgel
                         <td class="text-end">
                             <?php if ($c['status'] === 'pending'): ?>
                                 <a href="<?= url('quick-captures/' . $c['id']) ?>" class="btn btn-sm btn-primary">
-                                    <i class="bi bi-eye me-1"></i>Prüfen
+                                    <i class="bi bi-eye me-1"></i>Review
                                 </a>
                             <?php elseif ($c['status'] === 'approved' && $c['entry_id']): ?>
                                 <a href="<?= url('entries/' . $c['entry_id']) ?>" class="btn btn-sm btn-outline-success">
-                                    <i class="bi bi-box-arrow-up-right me-1"></i>Eintrag
+                                    <i class="bi bi-box-arrow-up-right me-1"></i>Entry
                                 </a>
                             <?php else: ?>
                                 <span class="text-muted small">
-                                    <?= $c['reviewer_name'] ? 'durch ' . e($c['reviewer_name']) : '' ?>
+                                    <?= $c['reviewer_name'] ? 'by ' . e($c['reviewer_name']) : '' ?>
                                 </span>
                             <?php endif; ?>
                         </td>

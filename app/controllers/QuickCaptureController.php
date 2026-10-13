@@ -143,7 +143,7 @@ class QuickCaptureController {
 
         $activeUsers = Database::fetchAll('SELECT id, name FROM users WHERE status=? ORDER BY name', ['active']);
         View::render('quick_capture/review', compact('capture','files','projects','entryTypes','activeUsers') + [
-            'title' => 'Quick Capture pruefen',
+            'title' => 'Review Quick Capture',
         ]);
     }
 
@@ -153,7 +153,7 @@ class QuickCaptureController {
         Auth::verifyCsrf();
         $capture = self::findOr404((int)$id);
         if ($capture['status'] !== 'pending') {
-            flash('error', 'Dieser Eintrag wurde bereits bearbeitet.');
+            flash('error', 'This entry has already been processed.');
             redirect('/quick-captures');
         }
 
@@ -165,18 +165,18 @@ class QuickCaptureController {
         $firmwareVersion = trim($_POST['firmware_version'] ?? (string)($capture['firmware_version'] ?? ''));
 
         if (!$projectId || !$typeId) {
-            flash('error', 'Bitte Projekt und Typ auswaehlen.');
+            flash('error', 'Please select a project and type.');
             redirect('/quick-captures/' . (int)$id);
         }
 
         // Enforce project access: the chosen project must be one the user may write into.
         $allowed = Auth::groupProjectIds(); // null = unrestricted (admin / ungrouped)
         if ($allowed !== null && !in_array($projectId, $allowed, true)) {
-            abort(403, 'Kein Zugriff auf das gewaehlte Projekt.');
+            abort(403, 'No access to the selected project.');
         }
         $projOk = Database::fetchOne("SELECT id FROM projects WHERE id=? AND status='active'", [$projectId]);
         if (!$projOk) {
-            flash('error', 'Projekt nicht gefunden.');
+            flash('error', 'Project not found.');
             redirect('/quick-captures/' . (int)$id);
         }
 
@@ -198,7 +198,7 @@ class QuickCaptureController {
             [$entryId, Auth::id(), date('Y-m-d H:i:s'), $assignedTo, (int)$id]
         );
 
-        flash('success', 'Eintrag freigegeben und uebernommen.');
+        flash('success', 'Entry approved and created.');
         redirect('/entries/' . $entryId);
     }
 
@@ -214,14 +214,14 @@ class QuickCaptureController {
             );
             self::deleteQuarantine((int)$id); // free disk; metadata rows kept for audit
         }
-        flash('success', 'Eintrag abgelehnt.');
+        flash('success', 'Entry rejected.');
         redirect('/quick-captures');
     }
 
     // -- Helpers --------------------------------------------------
     private static function findOr404(int $id): array {
         $row = Database::fetchOne('SELECT * FROM quick_captures WHERE id = ?', [$id]);
-        if (!$row) abort(404, 'Quick Capture nicht gefunden.');
+        if (!$row) abort(404, 'Quick Capture not found.');
         return $row;
     }
 
