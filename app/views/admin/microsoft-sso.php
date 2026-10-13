@@ -24,12 +24,12 @@
       </div>
       <div class="mb-3">
         <label class="form-label">Client Secret</label>
-        <input type="password" name="ms_client_secret" class="form-control" placeholder="<?= $hasClientSecret ? '•••••••• (unverändert lassen = nicht ändern)' : '' ?>">
-        <div class="form-text">Leer lassen, um den bereits gespeicherten Wert zu behalten.</div>
+        <input type="password" name="ms_client_secret" class="form-control" placeholder="<?= $hasClientSecret ? '•••••••• (leave unchanged = do not change)' : '' ?>">
+        <div class="form-text">Leave empty to keep the already saved value.</div>
       </div>
       <div class="alert alert-info small mb-0">
         <i class="bi bi-info-circle me-1"></i>
-        Redirect URI für die App-Registrierung in Entra ID:
+        Redirect URI for the app registration in Entra ID:
         <code><?= e((($_SERVER['HTTPS'] ?? '') === 'on' || strtolower($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . BASE_URL . '/auth/microsoft/callback') ?></code>
       </div>
     </div>
@@ -37,9 +37,9 @@
 
   <div class="alert alert-warning small" style="max-width:800px">
     <i class="bi bi-exclamation-triangle me-1"></i>
-    Microsoft-Anmeldung ersetzt das Passwort-Login nicht — sie ist eine zusätzliche Option.
-    Ein Login über Microsoft funktioniert nur für <strong>bereits existierende</strong> RoboDoc2-Konten
-    (Zuordnung über die E-Mail-Adresse) — es werden keine neuen Konten automatisch angelegt.
+    Microsoft sign-in does not replace password login — it is an additional option.
+    Logging in via Microsoft only works for <strong>already existing</strong> RoboDoc2 accounts
+    (matched by email address) — no new accounts are created automatically.
   </div>
 
   <div style="max-width:800px">

@@ -38,9 +38,9 @@ $priCss  = fn($p)=>($priStyle($p)==='orange'?'background:#f97316':'background:va
     <div class="dropdown">
       <button class="btn btn-outline-primary btn-sm dropdown-toggle" data-bs-toggle="dropdown"><i class="bi bi-arrow-repeat me-1"></i>All Live-Sync (<?= count($liveSyncEntries) ?>)</button>
       <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
-        <li><button class="dropdown-item small" onclick="bulkAction('livesync','accept')"><i class="bi bi-cloud-download me-2 text-success"></i>Alle Änderungen + Anhänge übernehmen</button></li>
+        <li><button class="dropdown-item small" onclick="bulkAction('livesync','accept')"><i class="bi bi-cloud-download me-2 text-success"></i>Accept all changes + attachments</button></li>
         <li><hr class="dropdown-divider"></li>
-        <li><button class="dropdown-item small text-muted" onclick="bulkAction('livesync','dismiss')"><i class="bi bi-eye-slash me-2"></i>Alle verwerfen (ignorieren)</button></li>
+        <li><button class="dropdown-item small text-muted" onclick="bulkAction('livesync','dismiss')"><i class="bi bi-eye-slash me-2"></i>Dismiss all (ignore)</button></li>
       </ul>
     </div>
     <?php endif; ?>
@@ -206,7 +206,7 @@ $priCss  = fn($p)=>($priStyle($p)==='orange'?'background:#f97316':'background:va
     <i class="bi bi-arrow-repeat text-primary"></i>
     <span class="fw-semibold">Live-Sync Changes</span>
     <span class="badge bg-primary ms-1"><?= count($liveSyncEntries) ?></span>
-    <small class="text-muted ms-2">Einträge, deren Quelle sich seit dem Import geändert hat (manuell geprüft)</small>
+    <small class="text-muted ms-2">Entries whose source has changed since import (manually reviewed)</small>
   </div>
   <div class="list-group list-group-flush" id="livesyncList">
     <?php foreach ($liveSyncEntries as $e):
@@ -244,25 +244,25 @@ $priCss  = fn($p)=>($priStyle($p)==='orange'?'background:#f97316':'background:va
             <?php if ($newAtts): ?>
             <label class="d-flex align-items-center gap-2 small mb-0" style="cursor:pointer">
               <input type="checkbox" class="form-check-input mt-0 livesync-attachments" checked>
-              <span class="text-muted fw-semibold" style="min-width:120px">Anhänge</span>
-              <span class="badge bg-primary"><?= count($newAtts) ?> neu auf der Quelle</span>
+              <span class="text-muted fw-semibold" style="min-width:120px">Attachments</span>
+              <span class="badge bg-primary"><?= count($newAtts) ?> new on source</span>
             </label>
             <?php endif; ?>
           </div>
           <?php else: ?>
-          <span class="text-muted small">Keine Feld-Differenz erkannt.</span>
+          <span class="text-muted small">No field differences detected.</span>
           <?php endif; ?>
         </div>
 
         <!-- Actions -->
         <div class="col-md-3 d-flex gap-2 flex-wrap justify-content-end align-items-start">
           <button class="btn btn-success btn-sm" onclick="liveSyncAccept(<?= $e['id'] ?>,this)"
-                  title="Ausgewählte Felder/Anhänge übernehmen">
-            <i class="bi bi-cloud-download me-1"></i>Ausgewählte übernehmen
+                  title="Apply selected fields/attachments">
+            <i class="bi bi-cloud-download me-1"></i>Apply selected
           </button>
           <button class="btn btn-outline-secondary btn-sm" onclick="entryAction('livesync',<?= $e['id'] ?>,'dismiss',this)"
-                  title="Änderung verwerfen, lokale Werte bleiben unverändert">
-            <i class="bi bi-eye-slash me-1"></i>Verwerfen
+                  title="Discard change, local values remain unchanged">
+            <i class="bi bi-eye-slash me-1"></i>Discard
           </button>
         </div>
       </div>
@@ -339,7 +339,7 @@ function liveSyncAccept(id, btn) {
   const scope = document.getElementById(`livesync-fields-${id}`);
   const fields = scope ? [...scope.querySelectorAll('.livesync-field:checked')].map(c => c.value) : [];
   const importAttachments = scope ? !!scope.querySelector('.livesync-attachments:checked') : false;
-  if (!fields.length && !importAttachments) { srToast('Nichts ausgewählt.', false); return; }
+  if (!fields.length && !importAttachments) { srToast('Nothing selected.', false); return; }
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
   const body = new URLSearchParams({ _csrf: _srCsrf });
@@ -351,12 +351,12 @@ function liveSyncAccept(id, btn) {
     if (d.error) { btn.innerHTML = orig; btn.disabled = false; srToast(d.error, false); return; }
     const row = document.getElementById(`livesync-row-${id}`);
     if (row) { row.style.opacity = '.4'; setTimeout(() => row.remove(), 500); }
-    let msg = `${d.fields_applied} Feld(er) übernommen`;
-    if (importAttachments) msg += `, ${d.attachments_synced} Anhang/Anhänge`;
-    if (d.attachment_errors?.length) msg += ` (${d.attachment_errors.length} Fehler)`;
+    let msg = `${d.fields_applied} field(s) applied`;
+    if (importAttachments) msg += `, ${d.attachments_synced} attachment(s)`;
+    if (d.attachment_errors?.length) msg += ` (${d.attachment_errors.length} error(s))`;
     srToast(msg, !(d.attachment_errors?.length));
   })
-  .catch(() => { btn.innerHTML = orig; btn.disabled = false; srToast('Netzwerkfehler', false); });
+  .catch(() => { btn.innerHTML = orig; btn.disabled = false; srToast('Network error', false); });
 }
 
 function bulkAction(source, action) {

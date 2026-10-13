@@ -51,9 +51,9 @@
     <div class="card-header border-secondary fw-semibold small"><i class="bi bi-arrow-left-right me-1"></i>Relay (optional)</div>
     <div class="card-body p-4">
       <div class="form-text mb-3">
-        Nur nötig, wenn diese RoboDoc2-Instanz Zentao nicht direkt erreichen kann (z.B. in einem
-        netzwerkbeschränkten Cluster). Alle Zentao-API-Aufrufe laufen dann stattdessen über ein
-        kleines Proxy-Script auf einem Host, der Zentao erreichen kann. Leer lassen für direkten Zugriff.
+        Only needed if this RoboDoc2 instance cannot reach Zentao directly (e.g. in a
+        network-restricted cluster). All Zentao API calls then run instead through a
+        small proxy script on a host that can reach Zentao. Leave empty for direct access.
       </div>
       <div class="mb-3">
         <label class="form-label">Relay URL</label>
@@ -61,8 +61,8 @@
       </div>
       <div class="mb-3">
         <label class="form-label">Relay Secret</label>
-        <input type="password" name="zentao_relay_secret" class="form-control" placeholder="<?= $hasRelaySecret ? '•••••••• (unverändert lassen = nicht ändern)' : '' ?>">
-        <div class="form-text">Muss mit <code>RELAY_SECRET</code> auf dem Relay-Server übereinstimmen. Leer lassen, um den gespeicherten Wert zu behalten.</div>
+        <input type="password" name="zentao_relay_secret" class="form-control" placeholder="<?= $hasRelaySecret ? '•••••••• (leave unchanged = do not change)' : '' ?>">
+        <div class="form-text">Must match <code>RELAY_SECRET</code> on the relay server. Leave empty to keep the stored value.</div>
       </div>
     </div>
   </div>
@@ -98,8 +98,8 @@
       <div class="form-text mb-3">When syncing Zentao status into RoboDoc, map it to the corresponding RoboDoc status.</div>
       <div class="form-text mb-3 text-warning-emphasis">
         <i class="bi bi-info-circle me-1"></i>
-        Du kannst pro Zentao-Status <strong>mehrere RoboDoc-Stati</strong> auswählen. Ist der Eintrag in einem der ausgewählten Stati, wird keine Änderung gemeldet.
-        Sind mehrere Stati ausgewählt, kann beim Akzeptieren der Änderungen (Review-Seite) einer davon ausgewählt werden — der <strong>erste</strong> ist dabei vorausgewählt.
+        You can select <strong>multiple RoboDoc statuses</strong> per Zentao status. If the entry is in one of the selected statuses, no change is reported.
+        If multiple statuses are selected, one of them can be chosen when accepting the changes (review page) — the <strong>first</strong> one is preselected.
       </div>
       <?php
       $rawMap         = json_decode($s['zentao_status_to_local'] ?? '{}', true) ?: [];
@@ -116,7 +116,7 @@
       $localStatuses  = entryStatuses();
       ?>
       <table class="table table-sm small align-middle mb-0">
-        <thead class="table-dark"><tr><th style="width:120px">Zentao Status</th><th>Erlaubte RoboDoc Stati (erster = Import-Standard)</th></tr></thead>
+        <thead class="table-dark"><tr><th style="width:120px">Zentao Status</th><th>Allowed RoboDoc Statuses (first = import default)</th></tr></thead>
         <tbody>
           <?php foreach ($zentaoStatuses as $zs): ?>
           <tr>

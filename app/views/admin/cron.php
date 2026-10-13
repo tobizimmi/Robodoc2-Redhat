@@ -6,7 +6,7 @@ $csrfToken = Auth::csrfToken();
 <div class="d-flex align-items-center justify-content-between mb-3">
   <div>
     <h5 class="mb-0"><i class="bi bi-clock-history me-2 text-primary"></i>Cron Jobs</h5>
-    <p class="text-muted small mb-0">Verwalte automatische Hintergrundaufgaben</p>
+    <p class="text-muted small mb-0">Manage automatic background tasks</p>
   </div>
 </div>
 
@@ -14,12 +14,12 @@ $csrfToken = Auth::csrfToken();
 <div class="alert alert-info d-flex gap-3 align-items-start mb-4">
   <i class="bi bi-info-circle-fill fs-5 flex-shrink-0 mt-1"></i>
   <div>
-    <strong>Einmalige Server-Einrichtung erforderlich</strong><br>
-    Trage diesen <strong>einen</strong> Cron Job auf dem Server ein — er erledigt alles automatisch:
+    <strong>One-time server setup required</strong><br>
+    Add this <strong>single</strong> cron job on the server — it handles everything automatically:
     <code class="d-block mt-2 p-2 bg-dark text-light rounded" style="font-size:12px">
       * * * * * php <?= rtrim($_SERVER['DOCUMENT_ROOT'] ?? '/var/www/...', '/') ?>/app/cron/runner.php
     </code>
-    <small class="text-muted">Danach kannst du alle Jobs hier in der UI aktivieren/deaktivieren.</small>
+    <small class="text-muted">After that, you can enable/disable all jobs here in the UI.</small>
   </div>
 </div>
 
@@ -30,11 +30,11 @@ $csrfToken = Auth::csrfToken();
       <thead class="table-dark">
         <tr>
           <th style="width:200px">Job</th>
-          <th>Beschreibung</th>
-          <th style="width:120px">Intervall</th>
-          <th style="width:150px">Letzter Lauf</th>
+          <th>Description</th>
+          <th style="width:120px">Interval</th>
+          <th style="width:150px">Last Run</th>
           <th style="width:100px">Status</th>
-          <th style="width:130px">Aktiv</th>
+          <th style="width:130px">Active</th>
           <th style="width:80px"></th>
         </tr>
       </thead>
@@ -52,7 +52,7 @@ $csrfToken = Auth::csrfToken();
               <input type="number" name="interval_min" value="<?= (int)$job['interval_min'] ?>"
                      min="1" max="1440" class="form-control form-control-sm" style="width:65px">
               <span class="text-muted small">min</span>
-              <button class="btn btn-outline-secondary btn-sm py-0 px-1" title="Speichern">
+              <button class="btn btn-outline-secondary btn-sm py-0 px-1" title="Save">
                 <i class="bi bi-check2"></i>
               </button>
             </form>
@@ -63,7 +63,7 @@ $csrfToken = Auth::csrfToken();
                 <?= date('d.m.Y H:i', strtotime($job['last_run_at'])) ?>
               </span>
             <?php else: ?>
-              <span class="text-muted">Noch nie</span>
+              <span class="text-muted">Never</span>
             <?php endif; ?>
           </td>
           <td>
@@ -75,7 +75,7 @@ $csrfToken = Auth::csrfToken();
               <span class="badge bg-danger" style="cursor:pointer"
                     data-bs-toggle="tooltip"
                     title="<?= e(mb_substr($job['last_run_msg'] ?? '', 0, 200)) ?>">
-                <i class="bi bi-x-lg me-1"></i>Fehler
+                <i class="bi bi-x-lg me-1"></i>Error
               </span>
             <?php endif; ?>
           </td>
@@ -114,7 +114,7 @@ $csrfToken = Auth::csrfToken();
         </tr>
         <?php endforeach; ?>
         <?php if (empty($jobs)): ?>
-        <tr><td colspan="7" class="text-center text-muted py-4">Keine Jobs gefunden</td></tr>
+        <tr><td colspan="7" class="text-center text-muted py-4">No jobs found</td></tr>
         <?php endif; ?>
       </tbody>
     </table>

@@ -19,7 +19,7 @@
   </div>
   <div class="col-md-7">
     <div class="card"><div class="card-header border-secondary fw-semibold small">Checklists</div>
-      <?php if (!$cls): ?><div class="card-body text-muted small text-center p-4">Keine Checklists.</div><?php endif; ?>
+      <?php if (!$cls): ?><div class="card-body text-muted small text-center p-4">No checklists.</div><?php endif; ?>
       <div class="list-group list-group-flush">
         <?php foreach ($cls as $cl): ?>
         <div class="list-group-item bg-transparent border-secondary py-2 px-3">

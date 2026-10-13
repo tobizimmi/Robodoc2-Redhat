@@ -14,7 +14,7 @@
             <div class="col-6"><label class="form-label small">Device</label><input type="text" name="device" class="form-control form-control-sm" placeholder="iPhone 14"></div>
           </div>
           <div class="mb-2"><label class="form-label small">Firmware</label><input type="text" name="firmware" class="form-control form-control-sm"></div>
-          <div class="mb-2"><label class="form-label small">Beschreibung</label><textarea name="description" class="form-control form-control-sm" rows="2"></textarea></div>
+          <div class="mb-2"><label class="form-label small">Description</label><textarea name="description" class="form-control form-control-sm" rows="2"></textarea></div>
           <button class="btn btn-primary btn-sm w-100">Create</button>
         </form>
       </div>
@@ -22,7 +22,7 @@
   </div>
   <div class="col-md-7">
     <div class="card"><div class="card-header border-secondary fw-semibold small">Environments</div>
-      <?php if (!$envs): ?><div class="card-body text-muted small text-center p-4">Keine Environments.</div><?php endif; ?>
+      <?php if (!$envs): ?><div class="card-body text-muted small text-center p-4">No environments.</div><?php endif; ?>
       <div class="list-group list-group-flush">
         <?php foreach ($envs as $env): ?>
         <div class="list-group-item bg-transparent border-secondary py-2 px-3">

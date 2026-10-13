@@ -1,7 +1,7 @@
 <?php $isEdit = $group !== null; ?>
 <div class="d-flex align-items-center gap-3 mb-4">
   <a href="#" class="btn btn-outline-secondary btn-sm rd-back" data-fallback="<?= url('admin/groups') ?>"><i class="bi bi-arrow-left"></i></a>
-  <h5 class="mb-0"><?= $isEdit ? 'Gruppe bearbeiten: ' . e($group['name']) : 'Neue Zugriffsgruppe' ?></h5>
+  <h5 class="mb-0"><?= $isEdit ? 'Edit Group: ' . e($group['name']) : 'New Access Group' ?></h5>
 </div>
 
 <form method="POST" action="<?= $isEdit ? url('admin/groups/' . $group['id'] . '/edit') : url('admin/groups/create') ?>">
@@ -13,16 +13,16 @@
 
       <!-- Group details -->
       <div class="card mb-3">
-        <div class="card-header border-secondary fw-semibold small">Gruppendetails</div>
+        <div class="card-header border-secondary fw-semibold small">Group Details</div>
         <div class="card-body">
           <div class="mb-3">
             <label class="form-label">Name <span class="text-danger">*</span></label>
             <input type="text" name="name" class="form-control" required value="<?= e($group['name'] ?? '') ?>">
           </div>
           <div class="mb-3">
-            <label class="form-label">Beschreibung</label>
+            <label class="form-label">Description</label>
             <textarea name="description" class="form-control" rows="2"
-                      placeholder="Wofür ist diese Gruppe?"><?= e($group['description'] ?? '') ?></textarea>
+                      placeholder="What is this group for?"><?= e($group['description'] ?? '') ?></textarea>
           </div>
         </div>
       </div>
@@ -30,17 +30,17 @@
       <!-- Module permission matrix -->
       <div class="card mb-3">
         <div class="card-header border-secondary fw-semibold small d-flex align-items-center gap-2">
-          <i class="bi bi-shield-lock me-1"></i>Modul-Berechtigungen
-          <span class="text-muted small fw-normal ms-1">— leer = kein Zugriff</span>
+          <i class="bi bi-shield-lock me-1"></i>Module Permissions
+          <span class="text-muted small fw-normal ms-1">— empty = no access</span>
         </div>
         <div class="card-body p-0">
           <table class="table table-dark table-sm mb-0 align-middle" style="font-size:.82rem">
             <thead>
               <tr>
-                <th class="ps-3">Modul</th>
-                <th class="text-center" style="width:72px"><span class="text-info" title="Einträge anderer User sehen">Anzeigen</span></th>
-                <th class="text-center" style="width:72px"><span class="text-success" title="Eigene anlegen &amp; bearbeiten">Eigene</span></th>
-                <th class="text-center" style="width:72px"><span class="text-warning" title="Alle Einträge bearbeiten">Bearbeiten</span></th>
+                <th class="ps-3">Module</th>
+                <th class="text-center" style="width:72px"><span class="text-info" title="See other users' entries">View</span></th>
+                <th class="text-center" style="width:72px"><span class="text-success" title="Create &amp; edit own">Own</span></th>
+                <th class="text-center" style="width:72px"><span class="text-warning" title="Edit all entries">Edit</span></th>
               </tr>
             </thead>
             <tbody>
@@ -78,19 +78,19 @@
         </div>
         <div class="card-footer border-secondary py-2 d-flex gap-3">
           <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setAllPerms(true)">
-            <i class="bi bi-check2-all me-1"></i>Alle aktivieren
+            <i class="bi bi-check2-all me-1"></i>Enable all
           </button>
           <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setAllPerms(false)">
-            <i class="bi bi-x-lg me-1"></i>Alle deaktivieren
+            <i class="bi bi-x-lg me-1"></i>Disable all
           </button>
           <button type="button" class="btn btn-outline-info btn-sm ms-auto" onclick="setViewOnly()">
-            <i class="bi bi-eye me-1"></i>Nur Lesen
+            <i class="bi bi-eye me-1"></i>View only
           </button>
         </div>
       </div>
 
       <button type="submit" class="btn btn-primary w-100">
-        <i class="bi bi-check-lg me-1"></i><?= $isEdit ? 'Änderungen speichern' : 'Gruppe erstellen' ?>
+        <i class="bi bi-check-lg me-1"></i><?= $isEdit ? 'Save Changes' : 'Create Group' ?>
       </button>
     </div>
 
@@ -98,7 +98,7 @@
     <div class="col-lg-3">
       <div class="card h-100">
         <div class="card-header border-secondary fw-semibold small d-flex align-items-center gap-2">
-          <i class="bi bi-people me-1"></i>Mitglieder
+          <i class="bi bi-people me-1"></i>Members
           <span class="badge bg-secondary ms-auto" id="memberCount"><?= count($memberIds) ?></span>
         </div>
         <div class="card-body p-0" style="max-height:520px;overflow-y:auto">
@@ -111,7 +111,7 @@
           </label>
           <?php endforeach; ?>
           <?php if (!$users): ?>
-          <div class="text-muted small p-3">Noch keine aktiven Benutzer.</div>
+          <div class="text-muted small p-3">No active users yet.</div>
           <?php endif; ?>
         </div>
       </div>
@@ -121,7 +121,7 @@
     <div class="col-lg-4">
       <div class="card h-100">
         <div class="card-header border-secondary fw-semibold small d-flex align-items-center gap-2">
-          <i class="bi bi-folder me-1"></i>Erlaubte Projekte
+          <i class="bi bi-folder me-1"></i>Allowed Projects
           <span class="badge bg-secondary ms-auto" id="projectCount"><?= count($projectIds) ?></span>
         </div>
         <div class="card-body p-0" style="max-height:520px;overflow-y:auto">
@@ -141,24 +141,24 @@
                 <label class="d-flex align-items-center gap-1 small" style="cursor:pointer">
                   <input type="radio" name="project_vis[<?= $p['id'] ?>]" value="all"
                          class="form-check-input m-0" <?= $vis === 'all' ? 'checked' : '' ?>>
-                  <span>Alle Einträge</span>
+                  <span>All entries</span>
                 </label>
                 <label class="d-flex align-items-center gap-1 small" style="cursor:pointer">
                   <input type="radio" name="project_vis[<?= $p['id'] ?>]" value="own"
                          class="form-check-input m-0" <?= $vis === 'own' ? 'checked' : '' ?>>
-                  <span class="text-warning">Nur eigene</span>
+                  <span class="text-warning">Own only</span>
                 </label>
               </div>
             </div>
           </div>
           <?php endforeach; ?>
           <?php if (!$projects): ?>
-          <div class="text-muted small p-3">Noch keine Projekte.</div>
+          <div class="text-muted small p-3">No projects yet.</div>
           <?php endif; ?>
         </div>
         <div class="card-footer border-secondary py-2 small text-muted">
           <i class="bi bi-info-circle me-1"></i>
-          „Nur eigene" zeigt auch Einträge die dem User zugewiesen wurden.
+          "Own only" also shows entries assigned to the user.
         </div>
       </div>
     </div>
@@ -167,7 +167,7 @@
 </form>
 
 <script>
-// Projekt-Checkboxen
+// Project checkboxes
 document.querySelectorAll('.project-cb').forEach(cb => {
   cb.addEventListener('change', () => {
     const vis = document.getElementById('vis-' + cb.dataset.pid);

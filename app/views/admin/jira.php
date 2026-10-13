@@ -167,10 +167,10 @@
     <div class="card-body p-4">
       <?php $jiraPriMap = $jiraPriMap ?? []; ?>
       <div class="form-text mb-3">
-        Wenn hier nichts eingetragen ist, wird der RoboDoc-Prioritätsname (z.B. "Medium") unverändert als
-        Jira-Prioritätsname gesendet. Verwendet dieses Jira-Projekt andere Namen (z.B. Zahlen wie "3.0"),
-        muss hier der exakte Jira-Name eingetragen werden — sonst lehnt Jira das Feld ab und die Priorität
-        wird beim Push nicht übernommen.
+        If nothing is entered here, the RoboDoc priority name (e.g. "Medium") is sent unchanged as the
+        Jira priority name. If this Jira project uses different names (e.g. numbers like "3.0"),
+        the exact Jira name must be entered here — otherwise Jira rejects the field and the priority
+        is not carried over on push.
       </div>
       <table class="table table-sm small align-middle mb-0" style="max-width:520px">
         <thead class="table-dark"><tr><th>RoboDoc Priority</th><th>Jira Priority Name</th></tr></thead>
@@ -180,7 +180,7 @@
             <td class="fw-semibold"><?= $pl ?></td>
             <td>
               <input type="text" name="jira_priority_map[<?= $pl ?>]" class="form-control form-control-sm"
-                     value="<?= e($jiraPriMap[$pl] ?? '') ?>" placeholder="<?= $pl ?> (unverändert)">
+                     value="<?= e($jiraPriMap[$pl] ?? '') ?>" placeholder="<?= $pl ?> (unchanged)">
             </td>
           </tr>
           <?php endforeach; ?>

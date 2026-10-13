@@ -5,72 +5,72 @@
  */
 ?>
 <div class="d-flex align-items-center justify-content-between mb-4">
-  <h5 class="mb-0"><i class="bi bi-shield-check me-2 text-success"></i>NIS2 & IT-Sicherheit Compliance</h5>
-  <span class="badge bg-success fs-6">Stand: <?= date('d.m.Y') ?></span>
+  <h5 class="mb-0"><i class="bi bi-shield-check me-2 text-success"></i>NIS2 & IT Security Compliance</h5>
+  <span class="badge bg-success fs-6">As of: <?= date('d.m.Y') ?></span>
 </div>
 
 <?php
 $checks = [
-  'NIS2 Art.21 — Authentifizierung' => [
-    ['Passwort-Hashing (bcrypt cost 12)', true, 'PASSWORD_BCRYPT mit cost=12'],
-    ['Mindestlänge 10 Zeichen + Komplexität', true, 'Groß/Klein/Zahl/Sonderzeichen erforderlich'],
-    ['2-Faktor-Authentifizierung (TOTP)', true, 'Google/MS Authenticator kompatibel'],
-    ['Backup-Codes für 2FA', true, '10 Einmalcodes bei 2FA-Aktivierung'],
-    ['Brute-Force-Schutz', true, '5 Versuche → Wartezeit, 10 → IP-Sperre'],
-    ['Session-Timeout (8h Inaktivität)', true, 'Automatischer Logout nach 8h'],
-    ['Session Fixation Schutz', true, 'session_regenerate_id() bei Login'],
-    ['Sichere Cookie-Flags', true, 'HttpOnly, SameSite=Lax, Secure (HTTPS)'],
+  'NIS2 Art.21 — Authentication' => [
+    ['Password hashing (bcrypt cost 12)', true, 'PASSWORD_BCRYPT with cost=12'],
+    ['Minimum length 10 characters + complexity', true, 'Upper/lower case, digit, special character required'],
+    ['Two-factor authentication (TOTP)', true, 'Compatible with Google/MS Authenticator'],
+    ['Backup codes for 2FA', true, '10 one-time codes on 2FA activation'],
+    ['Brute-force protection', true, '5 attempts → delay, 10 → IP ban'],
+    ['Session timeout (8h inactivity)', true, 'Automatic logout after 8h'],
+    ['Session fixation protection', true, 'session_regenerate_id() on login'],
+    ['Secure cookie flags', true, 'HttpOnly, SameSite=Lax, Secure (HTTPS)'],
   ],
-  'NIS2 Art.21 — Zugangskontrolle' => [
-    ['Rollenbasierte Zugriffskontrolle (RBAC)', true, 'admin/user/viewer Rollen'],
-    ['Projektbasierte Zugangsbeschränkung', true, 'Gruppenbasierter Projektzugang'],
-    ['Private Einträge', true, 'Sichtbarkeit auf Ersteller beschränkbar'],
-    ['IP-Sperren (Administrativ)', true, 'Manuelle + automatische IP-Bans'],
-    ['Aktive Sessions überwachbar', true, 'Admin kann Sessions terminieren'],
-    ['Account-Sperrung (disabled/pending)', true, 'Admin-Freigabe für neue Accounts'],
+  'NIS2 Art.21 — Access Control' => [
+    ['Role-based access control (RBAC)', true, 'admin/user/viewer roles'],
+    ['Project-based access restriction', true, 'Group-based project access'],
+    ['Private entries', true, 'Visibility restrictable to creator'],
+    ['IP bans (administrative)', true, 'Manual + automatic IP bans'],
+    ['Active sessions monitorable', true, 'Admin can terminate sessions'],
+    ['Account lockout (disabled/pending)', true, 'Admin approval for new accounts'],
   ],
-  'NIS2 Art.21 — Protokollierung & Monitoring' => [
-    ['Audit-Log für alle Sicherheitsereignisse', true, 'Login, Logout, Fehlversuche, 2FA'],
-    ['Datenzugriffs-Protokollierung', true, 'Lesezugriffe auf Einträge geloggt'],
-    ['IP + User-Agent im Audit-Log', true, 'Vollständige Nachverfolgbarkeit'],
-    ['Audit-Aufbewahrung 2 Jahre', true, 'Automatische DB-Bereinigung nach 730 Tagen'],
-    ['Admin-Benachrichtigung bei Sicherheitsvorfällen', true, 'E-Mail bei IP-Ban, Brute-Force'],
-    ['Fehlgeschlagene Login-Übersicht', true, 'Admin → Security Dashboard'],
+  'NIS2 Art.21 — Logging & Monitoring' => [
+    ['Audit log for all security events', true, 'Login, logout, failed attempts, 2FA'],
+    ['Data access logging', true, 'Read access to entries logged'],
+    ['IP + user agent in audit log', true, 'Full traceability'],
+    ['Audit retention 2 years', true, 'Automatic DB cleanup after 730 days'],
+    ['Admin notification on security incidents', true, 'Email on IP ban, brute-force'],
+    ['Failed login overview', true, 'Admin → Security Dashboard'],
   ],
-  'NIS2 Art.21 — Verschlüsselung & Übertragungssicherheit' => [
-    ['API-Keys verschlüsselt in DB (AES-256-GCM)', true, 'Jira/SharePoint Keys mit APP_SECRET verschlüsselt'],
-    ['HTTPS / TLS erzwungen', true, 'HSTS Header gesetzt (1 Jahr)'],
-    ['Datenverschlüsselung at rest', false, 'DB-Verschlüsselung: Serverseitig konfigurieren'],
-    ['Sichere Passwort-Reset-Links', true, 'HMAC-Token, 1h Gültigkeit, Einmalnutzung'],
-    ['CSRF-Schutz auf allen POST-Requests', true, 'Synchronizer Token Pattern'],
-    ['SQL-Injection-Schutz', true, 'Ausschließlich Prepared Statements'],
-    ['XSS-Schutz', true, 'htmlspecialchars() + CSP-Header'],
+  'NIS2 Art.21 — Encryption & Transmission Security' => [
+    ['API keys encrypted in DB (AES-256-GCM)', true, 'Jira/SharePoint keys encrypted with APP_SECRET'],
+    ['HTTPS / TLS enforced', true, 'HSTS header set (1 year)'],
+    ['Data encryption at rest', false, 'DB encryption: configure server-side'],
+    ['Secure password reset links', true, 'HMAC token, 1h validity, single use'],
+    ['CSRF protection on all POST requests', true, 'Synchronizer token pattern'],
+    ['SQL injection protection', true, 'Exclusively prepared statements'],
+    ['XSS protection', true, 'htmlspecialchars() + CSP header'],
   ],
-  'NIS2 Art.21 — Sicherheitsheader' => [
-    ['X-Frame-Options: SAMEORIGIN', true, 'Clickjacking-Schutz'],
-    ['X-Content-Type-Options: nosniff', true, 'MIME-Sniffing-Schutz'],
-    ['Content-Security-Policy', true, 'XSS-Schutz via CSP'],
-    ['Strict-Transport-Security (HSTS)', true, 'HTTPS erzwungen'],
+  'NIS2 Art.21 — Security Headers' => [
+    ['X-Frame-Options: SAMEORIGIN', true, 'Clickjacking protection'],
+    ['X-Content-Type-Options: nosniff', true, 'MIME-sniffing protection'],
+    ['Content-Security-Policy', true, 'XSS protection via CSP'],
+    ['Strict-Transport-Security (HSTS)', true, 'HTTPS enforced'],
     ['Referrer-Policy', true, 'strict-origin-when-cross-origin'],
-    ['Permissions-Policy', true, 'Kamera/Mikrofon/Standort gesperrt'],
-    ['Server-Header versteckt', true, 'X-Powered-By entfernt'],
+    ['Permissions-Policy', true, 'Camera/microphone/location blocked'],
+    ['Server header hidden', true, 'X-Powered-By removed'],
   ],
-  'DSGVO / BDSG — Datenschutz' => [
-    ['Personenbezogene Daten minimiert', true, 'Nur Name + E-Mail gespeichert'],
-    ['Audit-Log für Datenzugriffe', true, 'Nachvollziehbarkeit der Zugriffe'],
-    ['Passwort-Reset E-Mail-Schutz', true, 'Kein Enumeration-Angriff möglich'],
-    ['Private Einträge (Vertraulichkeit)', true, 'Datenschutz auf Eintragsebene'],
-    ['Datenexport pro Nutzer', false, 'DSGVO Art.20: Datenportabilität fehlt noch'],
+  'GDPR / Data Protection' => [
+    ['Personal data minimized', true, 'Only name + email stored'],
+    ['Audit log for data access', true, 'Traceability of access'],
+    ['Password reset email protection', true, 'No enumeration attack possible'],
+    ['Private entries (confidentiality)', true, 'Data protection at entry level'],
+    ['Per-user data export', false, 'GDPR Art.20: data portability still missing'],
   ],
-  'BSI IT-Grundschutz' => [
-    ['Passwort-Policy (BSI M 4.133)', true, 'Mind. 10 Zeichen, Komplexität'],
-    ['Mehrfaktor-Authentifizierung (BSI ORP.4)', true, 'TOTP implementiert'],
-    ['Protokollierung (BSI OPS.1.1.7)', true, 'Audit-Log mit 2J Aufbewahrung'],
-    ['Sitzungsverwaltung (BSI APP.3.1)', true, 'Timeout, Fixation-Schutz, Tracking'],
-    ['Eingabevalidierung (BSI APP.3.1)', true, 'Prepared Statements, htmlspecialchars'],
-    ['Patch-Management', false, 'Prozess für regelmäßige Updates definieren'],
-    ['Datensicherung / Backup', false, 'Backup-Konzept auf Serverebene erforderlich'],
-    ['Notfallplan (BSI BCM)', false, 'Business Continuity Plan dokumentieren'],
+  'BSI IT Baseline Protection' => [
+    ['Password policy (BSI M 4.133)', true, 'Min. 10 characters, complexity'],
+    ['Multi-factor authentication (BSI ORP.4)', true, 'TOTP implemented'],
+    ['Logging (BSI OPS.1.1.7)', true, 'Audit log with 2yr retention'],
+    ['Session management (BSI APP.3.1)', true, 'Timeout, fixation protection, tracking'],
+    ['Input validation (BSI APP.3.1)', true, 'Prepared statements, htmlspecialchars'],
+    ['Patch management', false, 'Define process for regular updates'],
+    ['Data backup', false, 'Backup concept required at server level'],
+    ['Emergency plan (BSI BCM)', false, 'Document business continuity plan'],
   ],
 ];
 $total = 0; $passed = 0;
@@ -93,7 +93,7 @@ $pct = round($passed / $total * 100);
           <div class="progress-bar bg-<?= $pct>=80?'success':($pct>=60?'warning':'danger') ?>"
                style="width:<?= $pct ?>%"></div>
         </div>
-        <div class="text-muted small"><?= $passed ?> von <?= $total ?> Anforderungen erfüllt</div>
+        <div class="text-muted small"><?= $passed ?> of <?= $total ?> requirements met</div>
       </div>
     </div>
   </div>
@@ -125,7 +125,7 @@ $pct = round($passed / $total * 100);
 
 <div class="alert alert-info mt-3">
   <i class="bi bi-info-circle me-2"></i>
-  <strong>Hinweis:</strong> Diese Übersicht bezieht sich auf Maßnahmen auf Anwendungsebene.
-  Serverseitige Maßnahmen (Backup, DB-Verschlüsselung, Patch-Management, Netzwerksicherheit)
-  müssen zusätzlich auf Infrastrukturebene umgesetzt werden.
+  <strong>Note:</strong> This overview covers measures at the application level.
+  Server-side measures (backup, DB encryption, patch management, network security)
+  must additionally be implemented at the infrastructure level.
 </div>

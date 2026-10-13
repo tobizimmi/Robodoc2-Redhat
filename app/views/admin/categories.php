@@ -9,7 +9,7 @@
         <form method="POST" action="<?= url('admin/categories') ?>">
           <?= csrfField() ?><input type="hidden" name="action" value="create">
           <div class="mb-2"><label class="form-label small">Name</label><input type="text" name="name" class="form-control form-control-sm" required></div>
-          <div class="mb-2"><label class="form-label small">Beschreibung</label><input type="text" name="description" class="form-control form-control-sm"></div>
+          <div class="mb-2"><label class="form-label small">Description</label><input type="text" name="description" class="form-control form-control-sm"></div>
           <div class="mb-2 d-flex gap-2">
             <div><label class="form-label small">Color</label><input type="color" name="color" class="form-control form-control-color form-control-sm" value="#6366f1"></div>
             <div><label class="form-label small">Order</label><input type="number" name="sort_order" class="form-control form-control-sm" value="0" style="width:70px"></div>

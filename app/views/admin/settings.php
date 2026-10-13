@@ -79,7 +79,7 @@
       $lists = [
         ['key'=>'entries_type_ids',      'label'=>'Entries',           'icon'=>'bi-journal-text',     'ids'=>$entriesIds, 'id_prefix'=>'ete'],
         ['key'=>'test_results_type_ids', 'label'=>'Test Results',      'icon'=>'bi-clipboard2-check', 'ids'=>$testResIds, 'id_prefix'=>'etr'],
-        ['key'=>'other_entries_type_ids','label'=>'Sonstige Einträge', 'icon'=>'bi-collection',       'ids'=>$otherIds,   'id_prefix'=>'eto'],
+        ['key'=>'other_entries_type_ids','label'=>'Other Entries', 'icon'=>'bi-collection',       'ids'=>$otherIds,   'id_prefix'=>'eto'],
       ];
     ?>
     <div class="row g-3 mb-4">
@@ -92,7 +92,7 @@
             <?php if (!empty($list['ids'])): ?>
             <span class="badge bg-primary ms-auto"><?= count($list['ids']) ?></span>
             <?php else: ?>
-            <span class="badge bg-secondary ms-auto text-muted" style="font-weight:400">alle</span>
+            <span class="badge bg-secondary ms-auto text-muted" style="font-weight:400">all</span>
             <?php endif; ?>
           </div>
           <div class="card-body p-2" style="max-height:220px;overflow-y:auto">
@@ -111,17 +111,17 @@
             <?php endforeach; ?>
           </div>
           <div class="card-footer py-1 px-3">
-            <small class="text-muted">Leer = alle Typen werden angezeigt</small>
+            <small class="text-muted">Empty = all types are shown</small>
           </div>
         </div>
       </div>
       <?php endforeach; ?>
     </div>
     <hr class="border-secondary my-4">
-    <h6 class="fw-semibold mb-1"><i class="bi bi-archive me-2 text-warning"></i>Automatische Archivierung nach Status</h6>
+    <h6 class="fw-semibold mb-1"><i class="bi bi-archive me-2 text-warning"></i>Automatic Archiving by Status</h6>
     <p class="text-muted small mb-3">
-      Einträge mit einem der hier ausgewählten Stati verschwinden aus der normalen Liste und erscheinen
-      nur noch unter dem Tab <strong>„Archiviert"</strong>.
+      Entries with one of the statuses selected here disappear from the normal list and appear
+      only under the <strong>"Archived"</strong> tab.
     </p>
     <?php $archivedStatuses = array_filter(array_map('trim', explode(',', $s['archived_statuses'] ?? ''))); ?>
     <div class="d-flex flex-wrap gap-2 mb-4">
