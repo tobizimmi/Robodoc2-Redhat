@@ -19,12 +19,17 @@ $pct       = $total > 0 ? round($passed / $total * 100) : 0;
       <?php if ($cycle['build']): ?> · Build: <?= e($cycle['build']) ?><?php endif; ?>
     </small>
   </div>
-  <div class="d-flex gap-2">
+  <div class="d-flex align-items-center gap-2">
     <?php
     $statusColors = ['planned'=>'secondary','active'=>'primary','completed'=>'success','aborted'=>'danger'];
     $sc = $statusColors[$cycle['status']] ?? 'secondary';
     ?>
     <span class="badge bg-<?= $sc ?> fs-6"><?= e(ucfirst($cycle['status'])) ?></span>
+    <?php if (Auth::canEdit('testing')): ?>
+    <a href="<?= url('test-runs/create?plan_id='.$cycle['plan_id'].'&cycle_id='.$cycle['id']) ?>" class="btn btn-primary btn-sm">
+      <i class="bi bi-play me-1"></i>Start Run
+    </a>
+    <?php endif; ?>
   </div>
 </div>
 
@@ -93,7 +98,7 @@ $pct       = $total > 0 ? round($passed / $total * 100) : 0;
       <table class="table table-sm table-dark table-hover mb-0">
         <thead>
           <tr>
-            <th>Name</th><th>Tester</th>
+            <th>Name</th><th>Test Cases</th>
             <th class="text-success">✓</th>
             <th class="text-danger">✗</th>
             <th class="text-warning">⏳</th>
@@ -116,7 +121,7 @@ $pct       = $total > 0 ? round($passed / $total * 100) : 0;
                 <?= e($run['name'] ?: 'Run #'.$run['id']) ?>
               </a>
             </td>
-            <td class="small text-muted">—</td>
+            <td class="small text-muted"><?= $rTotal ?></td>
             <td class="text-success"><?= $rPassed ?></td>
             <td class="text-danger"><?= $rFailed ?></td>
             <td class="text-warning"><?= $rPending ?></td>

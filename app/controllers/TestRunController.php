@@ -115,28 +115,46 @@ class TestRunController {
         Auth::requireEdit('testing');
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Auth::verifyCsrf();
-            $planId = (int)($_POST['test_plan_id'] ?? 0);
-            $name   = trim($_POST['name'] ?? '');
-            if (!$planId || !$name) { flash('error', 'Testplan und Name erforderlich.'); redirect('/test-runs/create'); }
-            $cycleId = (int)($_POST['test_cycle_id'] ?? 0) ?: null;
+            $planId  = (int)($_POST['test_plan_id'] ?? 0);
+            $name    = trim($_POST['name'] ?? '');
+            $cycleId = (int)($_POST['test_cycle_id'] ?? 0);
+            if (!$planId || !$name) { flash('error', 'Test plan and name are required.'); redirect('/test-runs/create'); }
+            // A Test Run always belongs to a Test Cycle now - the cycle is the
+            // container (e.g. "Sprint 23 Regression"), the run is one scoped
+            // pass through some of its test cases.
+            if (!$cycleId) { flash('error', 'A Test Cycle is required. Create one on the Test Plan page first.'); redirect('/test-runs/create?plan_id=' . $planId); }
+            $cycle = Database::fetchOne('SELECT id FROM test_cycles WHERE id=? AND test_plan_id=?', [$cycleId, $planId]);
+            if (!$cycle) { flash('error', 'That Test Cycle does not belong to the selected plan.'); redirect('/test-runs/create?plan_id=' . $planId); }
+
+            // Explicit test-case selection - a run only ever covers the test
+            // cases chosen here, not automatically the whole plan, since in
+            // practice a run rarely exercises every test case at once.
+            $itemIds = array_filter(array_map('intval', (array)($_POST['item_ids'] ?? [])));
+            if (!$itemIds) { flash('error', 'Select at least one test case.'); redirect('/test-runs/create?plan_id=' . $planId . '&cycle_id=' . $cycleId); }
+
             $runId = Database::insert(
                 'INSERT INTO test_runs (test_plan_id, test_cycle_id, name, description, environment, status, created_by) VALUES (?,?,?,?,?,?,?)',
                 [$planId, $cycleId, $name, trim($_POST['description'] ?? ''), trim($_POST['environment'] ?? ''), 'planned', Auth::id()]
             );
-            // Create result rows for all plan items
-            $items = Database::fetchAll('SELECT id FROM test_plan_items WHERE test_plan_id = ?', [$planId]);
-            foreach ($items as $item) {
+            // Re-verify each selected id actually belongs to this plan before
+            // creating its result row (defense against a tampered submission).
+            $ph = implode(',', array_fill(0, count($itemIds), '?'));
+            $validItems = Database::fetchAll(
+                "SELECT id FROM test_plan_items WHERE test_plan_id = ? AND id IN ($ph)",
+                array_merge([$planId], $itemIds)
+            );
+            foreach ($validItems as $item) {
                 Database::insert(
                     'INSERT INTO test_run_results (test_run_id, test_plan_item_id, status) VALUES (?,?,?)',
                     [$runId, $item['id'], 'new']
                 );
             }
             Database::execute("UPDATE test_runs SET status='active', started_at=NOW() WHERE id=?", [$runId]);
-            flash('success', 'Testlauf gestartet.');
+            flash('success', 'Test run started with ' . count($validItems) . ' test case(s).');
             redirect('/test-runs/' . $runId);
         }
         $plans = Database::fetchAll("SELECT tp.id, tp.name, p.name project_name FROM test_plans tp LEFT JOIN projects p ON p.id=tp.project_id ORDER BY tp.name");
-        View::render('test-runs/create', ['plans' => $plans, 'title' => 'Neuer Testlauf']);
+        View::render('test-runs/create', ['plans' => $plans, 'title' => 'New Test Run']);
     }
 
     public static function edit(string $id): void {
@@ -151,10 +169,10 @@ class TestRunController {
             if ($_POST['status'] === 'completed') {
                 Database::execute('UPDATE test_runs SET completed_at=NOW() WHERE id=? AND completed_at IS NULL', [(int)$id]);
             }
-            flash('success', 'Testlauf aktualisiert.');
+            flash('success', 'Test run updated.');
             redirect('/test-runs/' . $id);
         }
-        View::render('test-runs/edit', compact('run') + ['title' => 'Testlauf bearbeiten']);
+        View::render('test-runs/edit', compact('run') + ['title' => 'Edit Test Run']);
     }
 
     public static function delete(string $id): void {
@@ -201,7 +219,7 @@ class TestRunController {
             'UPDATE test_run_results SET ' . implode(',', $sets) . ' WHERE id=? AND test_run_id=?',
             $binds
         );
-        flash('success', 'Ergebnis gespeichert.');
+        flash('success', 'Result saved.');
         redirect('/test-runs/' . $id);
     }
 
@@ -352,7 +370,7 @@ class TestRunController {
             exit;
         }
         if (!preg_match('/^[A-Z][A-Z0-9]+-\d+$/', $key)) {
-            echo json_encode(['error' => 'Ungültiges Format - erwartet z.B. PQL-123.']);
+            echo json_encode(['error' => 'Invalid format - expected e.g. PQL-123.']);
             exit;
         }
         Database::execute('UPDATE test_run_results SET pql_issue_key=?, pql_status=NULL, pql_synced_at=NULL WHERE id=? AND test_run_id=?', [$key, (int)$rid, (int)$id]);
@@ -370,7 +388,7 @@ class TestRunController {
         Auth::verifyCsrf();
         $result2 = Database::fetchOne('SELECT pql_issue_key FROM test_run_results WHERE id=? AND test_run_id=?', [(int)$rid, (int)$id]);
         if (!$result2 || !$result2['pql_issue_key']) {
-            echo json_encode(['error' => 'Kein PQL-Ticket verknüpft.']);
+            echo json_encode(['error' => 'No PQL ticket linked.']);
             exit;
         }
         $result = JiraController::fetchIssueStatus($result2['pql_issue_key']);
@@ -400,7 +418,7 @@ class TestRunController {
         Auth::verifyCsrf();
         $entryId = (int)($_POST['entry_id'] ?? 0) ?: null;
         $jiraKey = trim($_POST['jira_key'] ?? '');
-        if (!$entryId && !$jiraKey) { http_response_code(422); echo json_encode(['error' => 'Entry oder Jira Key erforderlich']); exit; }
+        if (!$entryId && !$jiraKey) { http_response_code(422); echo json_encode(['error' => 'Entry or Jira key required']); exit; }
         // If entry has a Jira key, use it
         if ($entryId && !$jiraKey) {
             $entry = Database::fetchOne('SELECT jira_issue_key FROM entries WHERE id=?', [$entryId]);
@@ -422,7 +440,7 @@ class TestRunController {
     }
 
     public static function addItems(string $id): void {
-        Auth::require();
+        Auth::requireEdit('testing');
         Auth::verifyCsrf();
         $run = self::findOr404((int)$id);
 
@@ -451,6 +469,15 @@ class TestRunController {
         redirect('/test-runs/' . $id);
     }
 
+    // -- Remove a single test case from this run (its result row). --
+    public static function removeItem(string $id, string $rid): void {
+        Auth::requireEdit('testing');
+        Auth::verifyCsrf();
+        Database::execute('DELETE FROM test_run_results WHERE id=? AND test_run_id=?', [(int)$rid, (int)$id]);
+        flash('success', 'Test case removed from run.');
+        redirect('/test-runs/' . $id);
+    }
+
     private static function findOr404(int $id): array {
         $r = Database::fetchOne(
             "SELECT tr.*, tp.name plan_name, p.name project_name,
@@ -462,7 +489,7 @@ class TestRunController {
              WHERE tr.id=?",
             [$id]
         );
-        if (!$r) abort(404, 'Testlauf nicht gefunden');
+        if (!$r) abort(404, 'Test run not found');
         return $r;
     }
 }

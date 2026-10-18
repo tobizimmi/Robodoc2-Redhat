@@ -168,6 +168,7 @@ $router->post('/synapse/refresh-cache',          [SynapseController::class, 'ref
 $router->get('/synapse/list-all',              [SynapseController::class, 'listAll']);
 $router->post('/synapse/import-single',         [SynapseController::class, 'importSinglePlan']);
 $router->get('/test-plans/{id}/cycles-json',         [TestPlanController::class, 'cyclesJson']);
+$router->get('/test-plans/{id}/items-json',          [TestPlanController::class, 'itemsJson']);
 $router->post('/test-plans/{id}/cycles',              [TestCycleController::class, 'create']);
 $router->post('/test-plans/{id}/cycles/{cid}/delete', [TestCycleController::class, 'delete']);
 $router->post('/test-cycles/{id}/status',             [TestCycleController::class, 'updateStatus']);
@@ -211,6 +212,7 @@ $router->post('/test-runs/{id}/results/{rid}/bugs/{bid}/delete', [TestRunControl
 $router->post('/test-runs/{id}/results/{rid}/assign-tester',      [TestRunController::class, 'assignTester']);
 $router->post('/test-runs/{id}/results/{rid}/bugs',               [TestRunController::class, 'addBug']);
 $router->post('/test-runs/{id}/results/{rid}/bugs/{bid}/delete',  [TestRunController::class, 'removeBug']);
+$router->post('/test-runs/{id}/results/{rid}/remove', [TestRunController::class, 'removeItem']);
 $router->post('/test-runs/{id}/add-items', [TestRunController::class, 'addItems']);
 
 // -- Test Results -----------------------------------------

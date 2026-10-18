@@ -1686,3 +1686,58 @@ function runMigrationsReport(): array {
         created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
         INDEX (template_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // -- Migration: every test_runs row must belong to a test_cycle (Testing
+    // redesign - a Test Cycle is the container, each Test Run gets its own
+    // explicit test-case scope instead of always including the whole plan).
+    // test_cycle_id had no FK before this, so first clean up any dangling
+    // references and give every existing cycle-less run a home in a new
+    // "Legacy (migrated)" cycle per plan - nothing is deleted - and only then
+    // add the constraint. This file runs on every request, so the whole
+    // thing is wrapped: a failed ALTER here must never be fatal site-wide.
+    try {
+        $fkExists = Database::fetchOne(
+            "SELECT 1 FROM information_schema.KEY_COLUMN_USAGE
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'test_runs'
+               AND COLUMN_NAME = 'test_cycle_id' AND REFERENCED_TABLE_NAME = 'test_cycles'"
+        );
+        if (!$fkExists) {
+            // 1) Drop references to cycles that no longer exist (possible
+            // today since there was never a FK) so the new constraint can be added.
+            Database::execute(
+                "UPDATE test_runs SET test_cycle_id = NULL
+                 WHERE test_cycle_id IS NOT NULL
+                   AND test_cycle_id NOT IN (SELECT id FROM test_cycles)"
+            );
+            // 2) Migrate remaining cycle-less runs into an auto-created
+            // "Legacy (migrated)" cycle, one per plan, reusing it if present.
+            $orphanPlanIds = Database::fetchAll(
+                'SELECT DISTINCT test_plan_id FROM test_runs WHERE test_cycle_id IS NULL'
+            );
+            foreach ($orphanPlanIds as $row) {
+                $planId = (int)$row['test_plan_id'];
+                $legacyCycle = Database::fetchOne(
+                    'SELECT id FROM test_cycles WHERE test_plan_id=? AND name=?',
+                    [$planId, 'Legacy (migrated)']
+                );
+                $legacyCycleId = $legacyCycle['id'] ?? Database::insert(
+                    "INSERT INTO test_cycles (test_plan_id, name, description, status, created_at)
+                     VALUES (?, 'Legacy (migrated)', 'Auto-created to hold test runs that existed before Test Runs required a Test Cycle.', 'active', NOW())",
+                    [$planId]
+                );
+                Database::execute(
+                    'UPDATE test_runs SET test_cycle_id=? WHERE test_plan_id=? AND test_cycle_id IS NULL',
+                    [$legacyCycleId, $planId]
+                );
+            }
+            // 3) Now safe to enforce the relationship at the DB level.
+            // RESTRICT (not CASCADE) so deleting a cycle that still has runs
+            // fails loudly instead of silently orphaning them as before.
+            Database::execute(
+                'ALTER TABLE test_runs ADD CONSTRAINT fk_test_runs_cycle
+                 FOREIGN KEY (test_cycle_id) REFERENCES test_cycles(id) ON DELETE RESTRICT'
+            );
+        }
+    } catch (\Throwable $e) {
+        error_log('test_runs.test_cycle_id FK migration failed: ' . $e->getMessage());
+    }

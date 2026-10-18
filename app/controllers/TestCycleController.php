@@ -78,7 +78,7 @@ class TestCycleController
              WHERE tc.id=?',
             [(int)$id]
         );
-        if (!$cycle) abort(404, 'Test Cycle nicht gefunden');
+        if (!$cycle) abort(404, 'Test Cycle not found');
 
         // Runs with result stats (no executed_by on test_runs)
         $runs = Database::fetchAll(
@@ -98,24 +98,11 @@ class TestCycleController
             [(int)$id]
         );
 
-        // Aggregate stats for pie chart
-        $stats = Database::fetchOne(
-            "SELECT
-                SUM(trr.status='new')     new,
-                SUM(trr.status='passed')  passed,
-                SUM(trr.status='failed')  failed,
-                SUM(trr.status='pending') pending,
-                SUM(trr.status='skipped') skipped,
-                SUM(trr.status='blocked') blocked,
-                COUNT(trr.id)             total
-             FROM test_runs tr
-             LEFT JOIN test_run_results trr ON trr.test_run_id = tr.id
-             WHERE tr.test_cycle_id = ?",
-            [(int)$id]
-        );
-
-        // Failed results with notes and linked entries
-        $failedResults = Database::fetchAll(
+        // A test case can live in several runs of the same cycle (each run
+        // picks its own subset) - only the most recently executed result per
+        // test case counts toward the cycle's stats/failed/open lists, so a
+        // re-run doesn't double-count or leave a stale failure lingering.
+        $latestResults = Database::fetchAll(
             "SELECT trr.*, tpi.title test_name, tpi.description test_desc,
                     u.name tester_name,
                     GROUP_CONCAT(DISTINCT e.id ORDER BY e.id SEPARATOR ',')     entry_ids,
@@ -126,22 +113,29 @@ class TestCycleController
              LEFT JOIN users u ON u.id = trr.executed_by
              LEFT JOIN test_plan_item_entries tpie ON tpie.test_plan_item_id = trr.test_plan_item_id
              LEFT JOIN entries e ON e.id = tpie.entry_id
-             WHERE tr.test_cycle_id = ? AND trr.status = 'failed'
-             GROUP BY trr.id
-             ORDER BY trr.executed_at DESC",
-            [(int)$id]
+             WHERE tr.test_cycle_id = ?
+               AND trr.id = (
+                   SELECT trr2.id FROM test_run_results trr2
+                   JOIN test_runs tr2 ON tr2.id = trr2.test_run_id
+                   WHERE tr2.test_cycle_id = ?
+                     AND trr2.test_plan_item_id = trr.test_plan_item_id
+                   ORDER BY trr2.executed_at DESC, trr2.id DESC
+                   LIMIT 1
+               )
+             GROUP BY trr.id",
+            [(int)$id, (int)$id]
         );
 
-        // Pending test cases
-        $pendingResults = Database::fetchAll(
-            "SELECT trr.*, tpi.title test_name, tpi.description test_desc
-             FROM test_run_results trr
-             JOIN test_runs tr ON tr.id = trr.test_run_id
-             LEFT JOIN test_plan_items tpi ON tpi.id = trr.test_plan_item_id
-             WHERE tr.test_cycle_id = ? AND trr.status = 'pending'
-             ORDER BY tpi.title",
-            [(int)$id]
-        );
+        $stats = ['new' => 0, 'passed' => 0, 'failed' => 0, 'pending' => 0, 'skipped' => 0, 'blocked' => 0, 'total' => count($latestResults)];
+        $failedResults  = [];
+        $pendingResults = [];
+        foreach ($latestResults as $r) {
+            if (isset($stats[$r['status']])) $stats[$r['status']]++;
+            if ($r['status'] === 'failed')  $failedResults[]  = $r;
+            if ($r['status'] === 'pending') $pendingResults[] = $r;
+        }
+        usort($failedResults, fn($a, $b) => strcmp($b['executed_at'] ?? '', $a['executed_at'] ?? ''));
+        usort($pendingResults, fn($a, $b) => strcmp($a['test_name'] ?? '', $b['test_name'] ?? ''));
 
         $plan = Database::fetchOne(
             'SELECT * FROM test_plans tp LEFT JOIN projects p ON p.id=tp.project_id WHERE tp.id=?',

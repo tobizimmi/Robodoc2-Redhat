@@ -30,7 +30,7 @@ $allUsers = $allUsers ?? [];
 <div class="row g-3 mb-4">
   <?php
   $pct = $stats['total'] ? round($stats['passed'] / $stats['total'] * 100) : 0;
-  foreach ([['Gesamt','total','secondary'],['Neu','new','info'],['Bestanden','passed','success'],['Fehlgeschlagen','failed','danger'],['Offen','pending','secondary']] as [$l,$k,$c]):
+  foreach ([['Total','total','secondary'],['New','new','info'],['Passed','passed','success'],['Failed','failed','danger'],['Open','pending','secondary']] as [$l,$k,$c]):
   ?>
   <div class="col-6 col-md">
     <div class="card stat-card" style="border-left-color:var(--bs-<?= $c ?>)">
@@ -48,7 +48,7 @@ $allUsers = $allUsers ?? [];
      (not started yet) is left as plain background, uncounted. -->
 <div class="mb-4">
   <div class="d-flex justify-content-between mb-1 small text-muted">
-    <span>Fortschritt</span><span><?= $pct ?>% bestanden<?= $stats['pending'] ? ' · ' . $stats['pending'] . ' laufen' : '' ?></span>
+    <span>Progress</span><span><?= $pct ?>% passed<?= $stats['pending'] ? ' · ' . $stats['pending'] . ' running' : '' ?></span>
   </div>
   <div class="progress" style="height:12px">
     <?php foreach (['passed'=>'bg-success','failed'=>'bg-danger','pending'=>'bg-warning','skipped'=>'bg-info','blocked'=>'bg-dark'] as $st => $cls): ?>
@@ -97,7 +97,7 @@ $allUsers = $allUsers ?? [];
 
 <!-- Results -->
 <div class="card">
-  <div class="card-header border-secondary fw-semibold small">Testergebnisse</div>
+  <div class="card-header border-secondary fw-semibold small">Test Results</div>
   <div class="list-group list-group-flush">
     <?php foreach ($results as $r): ?>
     <?php $sc = ['new'=>'info','pending'=>'secondary','passed'=>'success','failed'=>'danger','skipped'=>'secondary','blocked'=>'warning']; ?>
@@ -116,6 +116,15 @@ $allUsers = $allUsers ?? [];
           <button class="btn btn-outline-secondary btn-sm py-0 px-2" data-bs-toggle="collapse" data-bs-target="#result-<?= $r['id'] ?>">
             <i class="bi bi-pencil"></i>
           </button>
+          <?php if (Auth::canEdit('testing')): ?>
+          <form method="POST" action="<?= url('test-runs/' . $run['id'] . '/results/' . $r['id'] . '/remove') ?>" class="d-inline"
+                onsubmit="return confirm('Remove this test case from the run? Its result history for this run is deleted.')">
+            <?= csrfField() ?>
+            <button class="btn btn-outline-danger btn-sm py-0 px-2" title="Remove from run">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </form>
+          <?php endif; ?>
         </div>
       </div>
 
@@ -123,7 +132,7 @@ $allUsers = $allUsers ?? [];
       <div class="mt-2">
           <?php if ($r['expected_result']): ?>
           <div class="text-muted small mb-1">
-            <span class="text-uppercase text-secondary" style="font-size:.65rem;letter-spacing:.03em">Erwartet</span>
+            <span class="text-uppercase text-secondary" style="font-size:.65rem;letter-spacing:.03em">Expected</span>
             <?= linkifyUrls($r['expected_result']) ?>
           </div>
           <?php endif; ?>
@@ -137,7 +146,7 @@ $allUsers = $allUsers ?? [];
             <i class="bi bi-file-earmark-text text-muted"></i>
             <?php if (!empty($r['report_file_path'])): ?>
             <a href="<?= url('test-runs/' . $run['id'] . '/results/' . $r['id'] . '/report') ?>" class="text-decoration-none">
-              <?= e($r['report_file_name'] ?: 'Testbericht') ?>
+              <?= e($r['report_file_name'] ?: 'Test Report') ?>
             </a>
             <?php endif; ?>
             <?php if (!empty($r['report_link'])): ?>
@@ -236,14 +245,14 @@ $allUsers = $allUsers ?? [];
             <i class="bi bi-person text-muted"></i>
             <?php if ($tName): ?>
             <span class="badge bg-secondary"><?= e($tName) ?></span>
-            <?php else: ?><span class="text-muted small">Kein Tester</span><?php endif; ?>
+            <?php else: ?><span class="text-muted small">No Tester</span><?php endif; ?>
             <?php if (Auth::canEdit('testing')): ?>
-            <button class="btn btn-outline-secondary btn-sm py-0 px-1" onclick="assignTester(<?= $r['id'] ?>,'<?= e(Auth::csrfToken()) ?>')" title="Tester zuweisen"><i class="bi bi-person-plus" style="font-size:.7rem"></i></button>
+            <button class="btn btn-outline-secondary btn-sm py-0 px-1" onclick="assignTester(<?= $r['id'] ?>,'<?= e(Auth::csrfToken()) ?>')" title="Assign tester"><i class="bi bi-person-plus" style="font-size:.7rem"></i></button>
             <?php endif; ?>
           </div>
           <div class="d-flex align-items-center gap-1 flex-wrap">
             <i class="bi bi-bug text-muted"></i>
-            <?php if (!$rBugs): ?><span class="text-muted small">Kein Bug</span><?php endif; ?>
+            <?php if (!$rBugs): ?><span class="text-muted small">No Bug</span><?php endif; ?>
             <?php foreach ($rBugs as $bug): ?>
             <span class="badge bg-danger d-flex align-items-center gap-1">
               <?php if ($bug['jira_key'] && $bug['entry_id']): ?>
@@ -259,7 +268,7 @@ $allUsers = $allUsers ?? [];
             </span>
             <?php endforeach; ?>
             <?php if (Auth::canEdit('testing')): ?>
-            <button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="addBugModal(<?= $r['id'] ?>,'<?= e(Auth::csrfToken()) ?>')" title="Bug verknuepfen"><i class="bi bi-bug" style="font-size:.7rem"></i></button>
+            <button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="addBugModal(<?= $r['id'] ?>,'<?= e(Auth::csrfToken()) ?>')" title="Link bug"><i class="bi bi-bug" style="font-size:.7rem"></i></button>
             <?php endif; ?>
           </div>
           <div class="d-flex align-items-center gap-1 flex-wrap">
@@ -274,13 +283,13 @@ $allUsers = $allUsers ?? [];
               <?php endif; ?>
             </span>
             <?php if (Auth::canEdit('testing')): ?>
-            <button type="button" class="btn btn-outline-info btn-sm py-0 px-1" onclick="pqlSync(<?= $r['id'] ?>,'<?= e(Auth::csrfToken()) ?>')" title="PQL-Status aktualisieren"><i class="bi bi-arrow-repeat" style="font-size:.7rem"></i></button>
-            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1" onclick="pqlEdit(<?= $r['id'] ?>)" title="Verknüpfung ändern"><i class="bi bi-pencil" style="font-size:.65rem"></i></button>
+            <button type="button" class="btn btn-outline-info btn-sm py-0 px-1" onclick="pqlSync(<?= $r['id'] ?>,'<?= e(Auth::csrfToken()) ?>')" title="Refresh PQL status"><i class="bi bi-arrow-repeat" style="font-size:.7rem"></i></button>
+            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1" onclick="pqlEdit(<?= $r['id'] ?>)" title="Change link"><i class="bi bi-pencil" style="font-size:.65rem"></i></button>
             <?php endif; ?>
             <?php else: ?>
-            <span class="text-muted small">Kein PQL</span>
+            <span class="text-muted small">No PQL</span>
             <?php if (Auth::canEdit('testing')): ?>
-            <button type="button" class="btn btn-outline-info btn-sm py-0 px-1" onclick="pqlEdit(<?= $r['id'] ?>)" title="PQL-Auftrag verknüpfen"><i class="bi bi-plus-lg" style="font-size:.7rem"></i></button>
+            <button type="button" class="btn btn-outline-info btn-sm py-0 px-1" onclick="pqlEdit(<?= $r['id'] ?>)" title="Link PQL ticket"><i class="bi bi-plus-lg" style="font-size:.7rem"></i></button>
             <?php endif; ?>
             <?php endif; ?>
           </div>
@@ -459,15 +468,15 @@ $allUsers = $allUsers ?? [];
               </select>
             </div>
             <div class="col-md-7">
-              <textarea name="notes" class="form-control form-control-sm" rows="4" placeholder="Notizen?"><?= e($r['notes']) ?></textarea>
+              <textarea name="notes" class="form-control form-control-sm" rows="4" placeholder="Notes?"><?= e($r['notes']) ?></textarea>
             </div>
             <div class="col-md-2"><button class="btn btn-success btn-sm w-100">Save</button></div>
             <div class="col-md-6">
-              <label class="form-label small mb-1 text-muted">Testbericht hochladen <span class="text-muted">(ersetzt vorhandenen)</span></label>
+              <label class="form-label small mb-1 text-muted">Upload Test Report <span class="text-muted">(replaces existing)</span></label>
               <input type="file" name="report_file" class="form-control form-control-sm">
             </div>
             <div class="col-md-6">
-              <label class="form-label small mb-1 text-muted">Oder Link zum Testbericht</label>
+              <label class="form-label small mb-1 text-muted">Or link to Test Report</label>
               <input type="url" name="report_link" class="form-control form-control-sm" value="<?= e($r['report_link'] ?? '') ?>" placeholder="https://...">
             </div>
           </div>
@@ -761,7 +770,7 @@ function synapseSync(runId, csrf) {
   .then(r => r.json())
   .then(d => {
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Sync'; }
-    const msg = d.success ? ('Sync fertig ? ' + (d.log||[]).length + ' Aktion(en).') : (d.error||'Fehler');
+    const msg = d.success ? ('Sync done - ' + (d.log||[]).length + ' action(s).') : (d.error||'Error');
     if (typeof showToast === 'function') showToast(msg, d.success ? 'success' : 'danger');
     else alert(msg);
   })
@@ -773,20 +782,20 @@ function synapseSync(runId, csrf) {
 <?php if (Auth::canEdit('testing')): ?>
 <div class="modal fade" id="testerModal" tabindex="-1">
   <div class="modal-dialog modal-sm"><div class="modal-content bg-dark border-secondary">
-    <div class="modal-header border-secondary py-2"><h6 class="modal-title">Tester zuweisen</h6>
+    <div class="modal-header border-secondary py-2"><h6 class="modal-title">Assign tester</h6>
       <button type="button" class="btn-close btn-close-white btn-sm" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
       <input type="hidden" id="testerResultId">
       <select id="testerSelect" class="form-select form-select-sm">
-        <option value="">-- Kein Tester --</option>
+        <option value="">-- No Tester --</option>
         <?php foreach ($allUsers as $u): ?>
         <option value="<?= $u['id'] ?>"><?= e($u['name']) ?></option>
         <?php endforeach; ?>
       </select>
     </div>
     <div class="modal-footer border-secondary py-2">
-      <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Abbrechen</button>
-      <button class="btn btn-primary btn-sm" onclick="saveTester()">Speichern</button>
+      <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveTester()">Save</button>
     </div>
   </div></div>
 </div>
@@ -794,7 +803,7 @@ function synapseSync(runId, csrf) {
 <div class="modal fade" id="bugModal" tabindex="-1">
   <div class="modal-dialog modal-lg"><div class="modal-content bg-dark border-secondary">
     <div class="modal-header border-secondary py-2">
-      <h6 class="modal-title"><i class="bi bi-bug me-1"></i>Bug verknüpfen / Neuen Bug erstellen</h6>
+      <h6 class="modal-title"><i class="bi bi-bug me-1"></i>Link Bug / Create New Bug</h6>
       <button type="button" class="btn-close btn-close-white btn-sm" data-bs-dismiss="modal"></button>
     </div>
     <div class="modal-body">
@@ -803,72 +812,72 @@ function synapseSync(runId, csrf) {
       <ul class="nav nav-tabs mb-3">
         <li class="nav-item">
           <button class="nav-link active" id="bugTabLinkBtn" onclick="bugTab('link')">
-            <i class="bi bi-link-45deg me-1"></i>Bestehenden verknüpfen
+            <i class="bi bi-link-45deg me-1"></i>Link existing
           </button>
         </li>
         <li class="nav-item">
           <button class="nav-link" id="bugTabNewBtn" onclick="bugTab('new')">
-            <i class="bi bi-plus-circle me-1"></i>Neuen Bug erstellen
+            <i class="bi bi-plus-circle me-1"></i>Create new bug
           </button>
         </li>
       </ul>
       <!-- Tab: Link existing -->
       <div id="bugTabLinkPane">
-        <p class="text-muted small mb-3">Verknüpfe einen bestehenden RoboDoc-Eintrag oder Jira-Key als Bug.</p>
+        <p class="text-muted small mb-3">Link an existing RoboDoc entry or Jira key as a bug.</p>
         <div class="mb-3">
-          <label class="form-label small">RoboDoc Eintrag suchen</label>
-          <input type="text" id="bugEntrySearch" class="form-control form-control-sm" placeholder="Titel suchen..." oninput="searchBugEntries(this.value)">
+          <label class="form-label small">Search RoboDoc entry</label>
+          <input type="text" id="bugEntrySearch" class="form-control form-control-sm" placeholder="Search title..." oninput="searchBugEntries(this.value)">
           <div id="bugEntryResults" class="mt-1" style="max-height:180px;overflow-y:auto"></div>
           <div id="bugSelectedEntry" class="mt-2"></div>
           <input type="hidden" id="bugEntryId">
         </div>
         <div>
-          <label class="form-label small">Oder direkt Jira Key eingeben</label>
-          <input type="text" id="bugJiraKey" class="form-control form-control-sm" placeholder="z.B. BRSQ-123">
+          <label class="form-label small">Or enter a Jira key directly</label>
+          <input type="text" id="bugJiraKey" class="form-control form-control-sm" placeholder="e.g. BRSQ-123">
         </div>
       </div>
       <!-- Tab: Create new bug -->
       <div id="bugTabNewPane" style="display:none">
-        <p class="text-muted small mb-3">Erstellt einen neuen Eintrag und verknüpft ihn direkt als Bug mit diesem Test-Ergebnis.</p>
+        <p class="text-muted small mb-3">Creates a new entry and links it directly as a bug to this test result.</p>
         <div class="mb-2">
-          <label class="form-label small">Titel <span class="text-danger">*</span></label>
-          <input type="text" id="newBugTitle" class="form-control form-control-sm" placeholder="Bug-Titel...">
+          <label class="form-label small">Title <span class="text-danger">*</span></label>
+          <input type="text" id="newBugTitle" class="form-control form-control-sm" placeholder="Bug title...">
         </div>
         <div class="row g-2 mb-2">
           <div class="col-6">
-            <label class="form-label small">Priorität</label>
+            <label class="form-label small">Priority</label>
             <select id="newBugPriority" class="form-select form-select-sm">
-              <option value="critical">Kritisch</option>
-              <option value="high">Hoch</option>
-              <option value="medium" selected>Mittel</option>
-              <option value="low">Niedrig</option>
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium" selected>Medium</option>
+              <option value="low">Low</option>
             </select>
           </div>
           <div class="col-6">
             <label class="form-label small">Status</label>
             <select id="newBugStatus" class="form-select form-select-sm">
-              <option value="new" selected>Neu</option>
-              <option value="open">Offen</option>
+              <option value="new" selected>New</option>
+              <option value="open">Open</option>
             </select>
           </div>
         </div>
         <div class="mb-2">
-          <label class="form-label small">Beschreibung</label>
-          <textarea id="newBugDesc" class="form-control form-control-sm" rows="3" placeholder="Fehlerbeschreibung, Schritte zur Reproduktion..."></textarea>
+          <label class="form-label small">Description</label>
+          <textarea id="newBugDesc" class="form-control form-control-sm" rows="3" placeholder="Bug description, steps to reproduce..."></textarea>
         </div>
         <div class="mb-2">
           <label class="form-label small">Jira Key (optional)</label>
-          <input type="text" id="newBugJira" class="form-control form-control-sm" placeholder="z.B. BRSQ-123">
+          <input type="text" id="newBugJira" class="form-control form-control-sm" placeholder="e.g. BRSQ-123">
         </div>
       </div>
     </div>
     <div class="modal-footer border-secondary py-2">
-      <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Abbrechen</button>
+      <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
       <button class="btn btn-danger btn-sm" id="bugLinkBtn" onclick="saveBug()">
-        <i class="bi bi-link-45deg me-1"></i>Verknüpfen
+        <i class="bi bi-link-45deg me-1"></i>Link
       </button>
       <button class="btn btn-primary btn-sm" id="bugCreateBtn" onclick="createAndLinkBug()" style="display:none">
-        <i class="bi bi-plus-circle me-1"></i>Erstellen &amp; Verknüpfen
+        <i class="bi bi-plus-circle me-1"></i>Create &amp; Link
       </button>
     </div>
   </div></div>
@@ -930,7 +939,7 @@ function saveTester() {
     body: new URLSearchParams({_csrf: _tCsrf, user_id: uid})
   }).then(r => r.json()).then(d => {
     if (d.success) { bootstrap.Modal.getInstance(document.getElementById('testerModal')).hide(); location.reload(); }
-    else alert(d.error || 'Fehler');
+    else alert(d.error || 'Error');
   });
 }
 
@@ -945,10 +954,10 @@ function bugTab(tab) {
 function createAndLinkBug() {
   const rid   = document.getElementById('bugResultId').value;
   const title = document.getElementById('newBugTitle').value.trim();
-  if (!title) { alert('Bitte Titel eingeben.'); return; }
+  if (!title) { alert('Please enter a title.'); return; }
   const btn = document.getElementById('bugCreateBtn');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Erstellen...';
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Creating...';
   fetch('<?= url("test-runs/") ?>' + _runId + '/results/' + rid + '/entry', {
     method: 'POST',
     headers: {'X-Requested-With': 'XMLHttpRequest'},
@@ -962,12 +971,12 @@ function createAndLinkBug() {
     })
   }).then(r => r.json()).then(d => {
     btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-plus-circle me-1"></i>Erstellen &amp; Verknüpfen';
+    btn.innerHTML = '<i class="bi bi-plus-circle me-1"></i>Create &amp; Link';
     if (d.success || d.entry_id) {
       bootstrap.Modal.getInstance(document.getElementById('bugModal')).hide();
       location.reload();
-    } else alert(d.error || 'Fehler beim Erstellen');
-  }).catch(e => { btn.disabled = false; alert('Netzwerkfehler: ' + e.message); });
+    } else alert(d.error || 'Error creating bug');
+  }).catch(e => { btn.disabled = false; alert('Network error: ' + e.message); });
 }
 function addBugModal(rid, csrf) {
   _bCsrf = csrf;
@@ -986,7 +995,7 @@ function searchBugEntries(q) {
     fetch('<?= url("api/entries/search") ?>?q=' + encodeURIComponent(q), {headers: {'X-Requested-With': 'XMLHttpRequest'}})
     .then(r => r.json()).then(items => {
       if (!Array.isArray(items) || !items.length) {
-        document.getElementById('bugEntryResults').innerHTML = '<div class="text-muted small py-1">Keine Eintraege.</div>';
+        document.getElementById('bugEntryResults').innerHTML = '<div class="text-muted small py-1">No entries.</div>';
         return;
       }
       document.getElementById('bugEntryResults').innerHTML = '<div class="list-group">' +
@@ -1003,7 +1012,7 @@ function selectBugEntry(id, title, jiraKey) {
   document.getElementById('bugEntryId').value = id;
   document.getElementById('bugSelectedEntry').innerHTML =
     '<span class="badge bg-secondary">' + title + '</span>' +
-    (jiraKey ? '<span class="badge bg-warning text-dark ms-1">' + jiraKey + '</span>' : '<span class="text-muted small ms-1">kein Jira-Key ? wird ignoriert</span>');
+    (jiraKey ? '<span class="badge bg-warning text-dark ms-1">' + jiraKey + '</span>' : '<span class="text-muted small ms-1">no Jira key - ignored</span>');
   document.getElementById('bugEntryResults').innerHTML = '';
   document.getElementById('bugEntrySearch').value = '';
   if (jiraKey) document.getElementById('bugJiraKey').value = jiraKey;
@@ -1012,17 +1021,17 @@ function saveBug() {
   const rid     = document.getElementById('bugResultId').value;
   const entryId = document.getElementById('bugEntryId').value;
   const jiraKey = document.getElementById('bugJiraKey').value.trim().toUpperCase();
-  if (!entryId && !jiraKey) { alert('Bitte Eintrag auswaehlen oder Jira Key eingeben.'); return; }
+  if (!entryId && !jiraKey) { alert('Please select an entry or enter a Jira key.'); return; }
   fetch('<?= url("test-runs/") ?>' + _runId + '/results/' + rid + '/bugs', {
     method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'},
     body: new URLSearchParams({_csrf: _bCsrf, entry_id: entryId, jira_key: jiraKey})
   }).then(r => r.json()).then(d => {
     if (d.success) { bootstrap.Modal.getInstance(document.getElementById('bugModal')).hide(); location.reload(); }
-    else alert(d.error || 'Fehler');
+    else alert(d.error || 'Error');
   });
 }
 function removeBug(bugId, rid, csrf) {
-  if (!confirm('Bug-Verknuepfung entfernen?')) return;
+  if (!confirm('Remove bug link?')) return;
   fetch('<?= url("test-runs/") ?>' + _runId + '/results/' + rid + '/bugs/' + bugId + '/delete', {
     method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'},
     body: new URLSearchParams({_csrf: csrf})
@@ -1036,7 +1045,7 @@ function synapseSync(csrf) {
     body: new URLSearchParams({_csrf: csrf, run_id: _runId, direction: 'both'})
   }).then(r => r.json()).then(d => {
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Sync'; }
-    const msg = d.success ? ('Sync fertig - ' + (d.log||[]).length + ' Aktionen.') : (d.error || 'Fehler');
+    const msg = d.success ? ('Sync done - ' + (d.log||[]).length + ' action(s).') : (d.error || 'Error');
     if (typeof showToast === 'function') showToast(msg, d.success ? 'success' : 'danger'); else alert(msg);
   }).catch(() => { if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Sync'; } });
 }

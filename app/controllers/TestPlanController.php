@@ -99,6 +99,21 @@ class TestPlanController {
         exit;
     }
 
+    // -- Test cases of a plan, for the Test Run creation checklist. --
+    public static function itemsJson(string $id): void {
+        Auth::requireView('testing');
+        header('Content-Type: application/json');
+        $items = Database::fetchAll(
+            'SELECT tpi.id, tpi.title, tpi.priority, tpi.category_id, tc.name category_name
+             FROM test_plan_items tpi
+             LEFT JOIN test_categories tc ON tc.id = tpi.category_id
+             WHERE tpi.test_plan_id=? ORDER BY tpi.sort_order, tpi.id',
+            [(int)$id]
+        );
+        echo json_encode($items);
+        exit;
+    }
+
     public static function create(): void {
         Auth::requireEdit('testing');
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -106,17 +121,17 @@ class TestPlanController {
             $projectId   = (int)($_POST['project_id'] ?? 0);
             $name        = trim($_POST['name'] ?? '');
             $description = trim($_POST['description'] ?? '');
-            if (!$name || !$projectId) { flash('error', 'Name und Projekt sind erforderlich.'); redirect('/test-plans/create'); }
+            if (!$name || !$projectId) { flash('error', 'Name and project are required.'); redirect('/test-plans/create'); }
             $id = Database::insert(
                 'INSERT INTO test_plans (project_id, name, description) VALUES (?,?,?)',
                 [$projectId, $name, $description]
             );
-            flash('success', 'Testplan erstellt.');
+            flash('success', 'Test plan created.');
             redirect('/test-plans/' . $id);
         }
         [$pSql, $pParams] = Auth::projectAccessClause('p');
         $projects = Database::fetchAll("SELECT id, name FROM projects p WHERE p.status='active' AND $pSql ORDER BY name", $pParams);
-        View::render('test-plans/create', ['projects' => $projects, 'title' => 'Neuer Testplan']);
+        View::render('test-plans/create', ['projects' => $projects, 'title' => 'New Test Plan']);
     }
 
     public static function edit(string $id): void {
@@ -129,12 +144,12 @@ class TestPlanController {
                 'UPDATE test_plans SET project_id=?, name=?, description=? WHERE id=?',
                 [(int)$_POST['project_id'], trim($_POST['name']), trim($_POST['description']), (int)$id]
             );
-            flash('success', 'Testplan aktualisiert.');
+            flash('success', 'Test plan updated.');
             redirect('/test-plans/' . $id);
         }
         [$pSql, $pParams] = Auth::projectAccessClause('p');
         $projects = Database::fetchAll("SELECT id, name FROM projects p WHERE $pSql ORDER BY name", $pParams);
-        View::render('test-plans/edit', compact('plan', 'projects') + ['title' => 'Testplan bearbeiten']);
+        View::render('test-plans/edit', compact('plan', 'projects') + ['title' => 'Edit Test Plan']);
     }
 
     public static function delete(string $id): void {
@@ -149,7 +164,7 @@ class TestPlanController {
         Auth::requireEdit('testing');
         Auth::verifyCsrf();
         $title  = trim($_POST['title'] ?? '');
-        if (!$title) { flash('error', 'Titel erforderlich.'); redirect('/test-plans/' . $id); }
+        if (!$title) { flash('error', 'Title required.'); redirect('/test-plans/' . $id); }
         $categoryId = (int)($_POST['category_id'] ?? 0) ?: null;
         $itemId = Database::insert(
             'INSERT INTO test_plan_items (test_plan_id, title, description, expected_result, priority, status, sort_order, category_id) VALUES (?,?,?,?,?,?,?,?)',
@@ -172,7 +187,7 @@ class TestPlanController {
              $_POST['priority'] ?? 'medium', $_POST['status'] ?? 'pending', (int)$iid, (int)$id]
         );
         self::saveCustomFieldValues((int)$iid);
-        flash('success', 'Item aktualisiert.');
+        flash('success', 'Item updated.');
         redirect('/test-plans/' . $id);
     }
 
@@ -196,7 +211,7 @@ class TestPlanController {
         $action   = trim($_POST['step_action'] ?? '');
         $testData = trim($_POST['test_data'] ?? '');
         $expected = trim($_POST['expected_result'] ?? '');
-        if (!$action && !$expected) { http_response_code(422); echo json_encode(['error' => 'Step oder Expected Result erforderlich']); exit; }
+        if (!$action && !$expected) { http_response_code(422); echo json_encode(['error' => 'Step or Expected Result required']); exit; }
         $maxOrder = (int)(Database::fetchOne('SELECT MAX(step_number) m FROM test_case_steps WHERE test_plan_item_id=?', [(int)$iid])['m'] ?? 0);
         $stepId = Database::insert('INSERT INTO test_case_steps (test_plan_item_id, step_number, step_action, test_data, expected_result, created_by) VALUES (?,?,?,?,?,?)', [(int)$iid, $maxOrder + 1, $action, $testData, $expected, Auth::id()]);
         echo json_encode(['success' => true, 'id' => $stepId, 'step_number' => $maxOrder + 1]);
@@ -228,14 +243,14 @@ class TestPlanController {
         Auth::requireEdit('testing');
         $plan = self::findOr404((int)$id);
         $item = Database::fetchOne('SELECT * FROM test_plan_items WHERE id=? AND test_plan_id=?', [(int)$iid, (int)$id]);
-        if (!$item) abort(404, 'Test Case nicht gefunden');
+        if (!$item) abort(404, 'Test Case not found');
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Auth::verifyCsrf();
             $categoryId = (int)($_POST['category_id'] ?? 0) ?: null;
             Database::execute('UPDATE test_plan_items SET title=?, description=?, expected_result=?, priority=?, status=?, category_id=? WHERE id=? AND test_plan_id=?',
                 [trim($_POST['title']), trim($_POST['description']??''), trim($_POST['expected_result']??''), $_POST['priority']??'medium', $_POST['status']??'pending', $categoryId, (int)$iid, (int)$id]);
             self::saveCustomFieldValues((int)$iid);
-            flash('success', 'Test Case aktualisiert.');
+            flash('success', 'Test Case updated.');
             redirect('/test-plans/' . $id);
         }
         $customFields = Database::fetchAll('SELECT * FROM test_case_fields ORDER BY sort_order, name');
@@ -245,7 +260,7 @@ class TestPlanController {
         }
         $categories = Database::fetchAll('SELECT * FROM test_categories WHERE project_id=? ORDER BY sort_order, name', [(int)$plan['project_id']]);
         $steps = Database::fetchAll('SELECT * FROM test_case_steps WHERE test_plan_item_id=? ORDER BY step_number', [(int)$iid]);
-        View::render('test-plans/edit-item', compact('plan', 'item', 'customFields', 'customValues', 'steps', 'categories') + ['title' => 'Test Case bearbeiten']);
+        View::render('test-plans/edit-item', compact('plan', 'item', 'customFields', 'customValues', 'steps', 'categories') + ['title' => 'Edit Test Case']);
     }
 
     public static function deleteItem(string $id, string $iid): void {
@@ -260,7 +275,7 @@ class TestPlanController {
         Auth::requireEdit('testing');
         Auth::verifyCsrf();
         $plan = self::findOr404((int)$id);
-        if (empty($_FILES['csv']['tmp_name'])) { flash('error', 'Keine Datei.'); redirect('/test-plans/' . $id); }
+        if (empty($_FILES['csv']['tmp_name'])) { flash('error', 'No file.'); redirect('/test-plans/' . $id); }
         $rows = array_map('str_getcsv', file($_FILES['csv']['tmp_name']));
         $header = array_shift($rows);
         $count = 0;
@@ -272,7 +287,7 @@ class TestPlanController {
             );
             $count++;
         }
-        flash('success', "$count Items importiert.");
+        flash('success', "$count items imported.");
         redirect('/test-plans/' . $id);
     }
 
@@ -281,7 +296,7 @@ class TestPlanController {
             'SELECT tp.*, p.name project_name FROM test_plans tp LEFT JOIN projects p ON p.id=tp.project_id WHERE tp.id=?',
             [$id]
         );
-        if (!$p) abort(404, 'Testplan nicht gefunden');
+        if (!$p) abort(404, 'Test plan not found');
         return $p;
     }
 
@@ -290,7 +305,7 @@ class TestPlanController {
         $pid = $plan['project_id'] ?? null;
         if (!$pid) return;
         $ids = Auth::groupProjectIds();
-        if ($ids !== null && !in_array((int)$pid, $ids, true)) abort(403, 'Kein Zugriff auf dieses Projekt');
+        if ($ids !== null && !in_array((int)$pid, $ids, true)) abort(403, 'No access to this project');
     }
 
     private static function saveCustomFieldValues(int $itemId): void {
