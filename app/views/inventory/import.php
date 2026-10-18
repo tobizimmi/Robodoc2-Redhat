@@ -6,12 +6,12 @@
 <div class="row g-4" style="max-width:800px">
   <div class="col-12">
     <div class="card">
-      <div class="card-header border-secondary fw-semibold small"><i class="bi bi-upload me-1"></i>Datei hochladen</div>
+      <div class="card-header border-secondary fw-semibold small"><i class="bi bi-upload me-1"></i>Upload File</div>
       <div class="card-body p-4">
         <form method="POST" action="<?= url('inventory/import') ?>" enctype="multipart/form-data">
           <?= csrfField() ?>
           <div class="mb-3">
-            <label class="form-label">Projekt (für alle importierten Geräte)</label>
+            <label class="form-label">Project (for all imported devices)</label>
             <select name="project_id" class="form-select" style="max-width:300px">
               <option value="">— Unassigned —</option>
               <?php foreach ($projects as $p): ?>
@@ -20,11 +20,11 @@
             </select>
           </div>
           <div class="mb-4">
-            <label class="form-label">CSV Datei</label>
+            <label class="form-label">CSV File</label>
             <input type="file" name="csv" class="form-control" accept=".csv,.txt" required style="max-width:400px">
-            <div class="form-text">Trennzeichen: Komma oder Semikolon. UTF-8 Encoding.</div>
+            <div class="form-text">Delimiter: comma or semicolon. UTF-8 encoding.</div>
           </div>
-          <button type="submit" class="btn btn-primary"><i class="bi bi-upload me-1"></i>Import starten</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-upload me-1"></i>Start Import</button>
         </form>
       </div>
     </div>
@@ -34,22 +34,22 @@
     <div class="card">
       <div class="card-header border-secondary fw-semibold small"><i class="bi bi-info-circle me-1"></i>CSV Format</div>
       <div class="card-body p-4">
-        <p class="text-muted small mb-3">Die erste Zeile muss die Spaltennamen enthalten. Folgende Spalten werden unterstützt:</p>
+        <p class="text-muted small mb-3">The first line must contain the column names. The following columns are supported:</p>
         <table class="table table-sm small">
           <thead class="table-dark">
-            <tr><th>Spalte</th><th>Pflicht</th><th>Mögliche Werte</th></tr>
+            <tr><th>Column</th><th>Required</th><th>Possible Values</th></tr>
           </thead>
           <tbody>
-            <tr><td class="fw-semibold font-monospace">name</td><td><span class="badge bg-danger">Ja</span></td><td>Gerätename</td></tr>
-            <tr><td class="fw-semibold font-monospace">serial_number</td><td class="text-muted">—</td><td>Seriennummer</td></tr>
-            <tr><td class="fw-semibold font-monospace">firmware_version</td><td class="text-muted">—</td><td>Firmware-Version</td></tr>
-            <tr><td class="fw-semibold font-monospace">location</td><td class="text-muted">—</td><td>Lagerort</td></tr>
-            <tr><td class="fw-semibold font-monospace">comment</td><td class="text-muted">—</td><td>Anmerkung</td></tr>
+            <tr><td class="fw-semibold font-monospace">name</td><td><span class="badge bg-danger">Yes</span></td><td>Device name</td></tr>
+            <tr><td class="fw-semibold font-monospace">serial_number</td><td class="text-muted">—</td><td>Serial number</td></tr>
+            <tr><td class="fw-semibold font-monospace">firmware_version</td><td class="text-muted">—</td><td>Firmware version</td></tr>
+            <tr><td class="fw-semibold font-monospace">location</td><td class="text-muted">—</td><td>Storage location</td></tr>
+            <tr><td class="fw-semibold font-monospace">comment</td><td class="text-muted">—</td><td>Comment</td></tr>
             <tr><td class="fw-semibold font-monospace">status</td><td class="text-muted">—</td><td><code>available</code>, <code>in_use</code>, <code>maintenance</code>, <code>retired</code></td></tr>
-            <tr><td class="fw-semibold font-monospace">purchased_at</td><td class="text-muted">—</td><td>Datum (YYYY-MM-DD)</td></tr>
+            <tr><td class="fw-semibold font-monospace">purchased_at</td><td class="text-muted">—</td><td>Date (YYYY-MM-DD)</td></tr>
           </tbody>
         </table>
-        <p class="text-muted small mb-2 mt-3">Beispiel (Komma):</p>
+        <p class="text-muted small mb-2 mt-3">Example (comma):</p>
         <pre class="bg-dark rounded p-3 small text-light mb-0">name,serial_number,firmware_version,status
 Automower 450X,SN-001,3.4.2,available
 Automower 310,SN-002,2.1.0,in_use</pre>
