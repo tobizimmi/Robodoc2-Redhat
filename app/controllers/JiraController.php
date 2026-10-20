@@ -51,6 +51,7 @@ class JiraController
 
         $entry = self::fetchEntry((int)$id);
         if (!$entry) { http_response_code(404); echo json_encode(['error' => 'Entry not found']); return; }
+        self::checkEntryAccess($entry);
 
         [$jiraUrl, $apiBase, $authHeader, $err] = self::resolveAuth();
         if ($err) { http_response_code(400); echo json_encode(['error' => $err]); return; }
@@ -120,6 +121,7 @@ class JiraController
 
         $entry = self::fetchEntry((int)$id);
         if (!$entry) { http_response_code(404); echo json_encode(['error' => 'Entry not found']); return; }
+        self::checkEntryAccess($entry);
         if (!($entry['jira_issue_key'] ?? '')) { http_response_code(400); echo json_encode(['error' => 'No Jira issue linked to this entry.']); return; }
 
         $user     = Database::fetchOne('SELECT jira_title_template, jira_desc_template FROM users WHERE id=?', [Auth::id()]);
@@ -995,6 +997,7 @@ class JiraController
         if (!$entry || !$entry['jira_issue_key']) {
             json(['error' => 'No Jira issue linked to this entry.']);
         }
+        self::checkEntryAccess($entry);
 
         [$jiraUrl, $apiBase, $authHeader, $err] = self::resolveAuth();
         if ($err) { json(['error' => $err]); }
@@ -1191,5 +1194,17 @@ class JiraController
             'won\'t fix', 'wont fix', 'rejected'                   => 'rejected',
             default                                                 => 'new',
         };
+    }
+
+    // Checked explicitly at each HTTP-reachable entry point below (create,
+    // update, syncStatus) rather than inside fetchEntry()/buildAndPushEntry()
+    // themselves, since those are also used by createForEntry() - a
+    // fire-and-forget background push called right after EntryController
+    // creates an entry, wrapped in try/catch, which must never abort().
+    private static function checkEntryAccess(?array $entry): void {
+        if (!$entry || Auth::isAdmin()) return;
+        $ids = Auth::groupProjectIds();
+        $pid = $entry['project_id'] ?? null;
+        if ($pid && $ids !== null && !in_array((int)$pid, $ids, true)) abort(403, 'No access to this project');
     }
 }

@@ -208,7 +208,8 @@ class ZentaoController
         Auth::verifyCsrf();
         session_write_close();
 
-        $entry = Database::fetchOne('SELECT id, zentao_bug_id FROM entries WHERE id=?', [(int)$id]);
+        $entry = Database::fetchOne('SELECT id, zentao_bug_id, project_id FROM entries WHERE id=?', [(int)$id]);
+        self::checkEntryAccess($entry);
         if (!$entry || !$entry['zentao_bug_id']) { json(['error' => 'No Zentao bug linked.']); }
 
         $state = self::fetchBugState((int)$entry['zentao_bug_id']);
@@ -321,7 +322,7 @@ class ZentaoController
 
     public static function fetchEntry(int $id): ?array
     {
-        return Database::fetchOne(
+        $entry = Database::fetchOne(
             "SELECT e.*, et.name type_name, p.name project_name,
                     ec.name cat_name, env.name env_name, ta.name test_area_name, u.name creator_name
              FROM entries e
@@ -334,6 +335,18 @@ class ZentaoController
              WHERE e.id = ?",
             [$id]
         ) ?: null;
+        // Every caller here is a logged-in, request-time action (push/pull/
+        // sync a Zentao bug for one entry) - this used to have no project
+        // check at all, so any logged-in user could push/sync/link any
+        // entry's Zentao bug regardless of project membership. The cron
+        // background scan (bulkCheckChanges()) never calls this method, so
+        // it's unaffected.
+        if ($entry && !Auth::isAdmin()) {
+            $ids = Auth::groupProjectIds();
+            $pid = $entry['project_id'] ?? null;
+            if ($pid && $ids !== null && !in_array((int)$pid, $ids, true)) abort(403, 'No access to this project');
+        }
+        return $entry;
     }
 
     // Wrap each line of plain text in its own <p> before sending to Zentao's
@@ -684,6 +697,9 @@ class ZentaoController
         Auth::require();
         Auth::verifyCsrf();
         header('Content-Type: application/json');
+        $entry = Database::fetchOne('SELECT id, project_id FROM entries WHERE id=?', [(int)$id]);
+        if (!$entry) { echo json_encode(['error' => 'Entry not found']); exit; }
+        self::checkEntryAccess($entry);
         $bugId = (int)($_POST['bug_id'] ?? 0);
         if (!$bugId) { echo json_encode(['error' => 'Bug ID required']); exit; }
         [$zentaoUrl, $token, , $err] = self::resolveConfig();
@@ -700,5 +716,12 @@ class ZentaoController
         );
         echo json_encode(['success' => true, 'bug_id' => $bugId, 'bug_url' => $bugUrl, 'title' => $bugData['title'] ?? '']);
         exit;
+    }
+
+    private static function checkEntryAccess(?array $entry): void {
+        if (!$entry || Auth::isAdmin()) return;
+        $ids = Auth::groupProjectIds();
+        $pid = $entry['project_id'] ?? null;
+        if ($pid && $ids !== null && !in_array((int)$pid, $ids, true)) abort(403, 'No access to this project');
     }
 }

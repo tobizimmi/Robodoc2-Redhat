@@ -12,10 +12,11 @@ class ZentaoSyncController
         if (!$sourceId) { echo json_encode(['error' => 'Missing source_id']); exit; }
 
         $rec = Database::fetchOne(
-            'SELECT id, zentao_bug_id, zentao_bug_hash, zentao_synced_at, zentao_has_changes, zentao_status, status FROM entries WHERE id=?',
+            'SELECT id, zentao_bug_id, zentao_bug_hash, zentao_synced_at, zentao_has_changes, zentao_status, status, project_id FROM entries WHERE id=?',
             [$sourceId]
         );
         if (!$rec || !$rec['zentao_bug_id']) { echo json_encode(['error' => 'No Zentao bug linked']); exit; }
+        self::checkEntryAccess($rec);
 
         $state = ZentaoController::fetchBugState((int)$rec['zentao_bug_id']);
         if ($state['error'] ?? null) { echo json_encode(['error' => $state['error']]); exit; }
@@ -142,6 +143,7 @@ class ZentaoSyncController
         session_write_close(); // release session lock before slow external API calls
         $entry = Database::fetchOne('SELECT * FROM entries WHERE id=?', [(int)$id]);
         if (!$entry || !$entry['zentao_bug_id']) abort(404);
+        self::checkEntryAccess($entry);
 
         $state = ZentaoController::fetchBugState((int)$entry['zentao_bug_id']);
         if ($state['error'] ?? null) {
@@ -200,8 +202,9 @@ class ZentaoSyncController
         Auth::verifyCsrf();
         session_write_close(); // release session lock before slow external API calls
         header('Content-Type: application/json');
-        $entry = Database::fetchOne('SELECT zentao_bug_id FROM entries WHERE id=?', [(int)$id]);
+        $entry = Database::fetchOne('SELECT zentao_bug_id, project_id FROM entries WHERE id=?', [(int)$id]);
         if (!$entry || !$entry['zentao_bug_id']) { echo json_encode(['error' => 'No Zentao bug linked']); exit; }
+        self::checkEntryAccess($entry);
         $state = ZentaoController::fetchBugState((int)$entry['zentao_bug_id']);
         if ($state['error'] ?? null) { echo json_encode(['error' => $state['error']]); exit; }
         $count = 0;
@@ -296,7 +299,8 @@ class ZentaoSyncController
             }
         }
 
-        $projects   = Database::fetchAll('SELECT id, name FROM projects ORDER BY name');
+        [$pSql, $pParams] = Auth::projectAccessClause();
+        $projects   = Database::fetchAll("SELECT id, name FROM projects WHERE $pSql ORDER BY name", $pParams);
         $entryTypes = Database::fetchAll('SELECT id, name FROM entry_types ORDER BY sort_order, name');
         View::render('zentao-sync/unlinked', compact('bugs', 'dismissed', 'error', 'zentaoUrl', 'projects', 'entryTypes') + ['title' => 'Unlinked Zentao Bugs']);
     }
@@ -334,6 +338,9 @@ class ZentaoSyncController
         $bugId   = (int)($_POST['bug_id'] ?? 0);
         $entryId = (int)($_POST['entry_id'] ?? 0);
         if (!$bugId || !$entryId) { echo json_encode(['error' => 'Missing bug_id or entry_id']); exit; }
+        $entry = Database::fetchOne('SELECT id, project_id FROM entries WHERE id=?', [$entryId]);
+        if (!$entry) { echo json_encode(['error' => 'Entry not found']); exit; }
+        self::checkEntryAccess($entry);
 
         $zentaoUrl = rtrim(appSetting('zentao_url', ''), '/');
         $bugUrl    = "$zentaoUrl/bug-view-$bugId.html";
@@ -357,6 +364,7 @@ class ZentaoSyncController
             flash('error', 'Bug ID, project and entry type are required.');
             redirect('/zentao-unlinked');
         }
+        self::checkEntryAccess(['project_id' => $projectId]);
 
         $state   = ZentaoController::fetchBugState($bugId);
         $title   = trim($_POST['title'] ?? ($state['title'] ?? "Bug #$bugId"));
@@ -393,6 +401,7 @@ class ZentaoSyncController
         if (!$items || !$projectId || !$typeId) {
             json(['error' => 'Items, project and type are required.'], 400);
         }
+        self::checkEntryAccess(['project_id' => $projectId]);
 
         $zentUrl = rtrim(appSetting('zentao_url', ''), '/');
         $created = 0;
@@ -424,7 +433,8 @@ class ZentaoSyncController
         Auth::require();
         Auth::verifyCsrf();
         session_write_close(); // release session lock before slow external API calls
-        $entry = Database::fetchOne('SELECT zentao_bug_id FROM entries WHERE id=?', [(int)$id]);
+        $entry = Database::fetchOne('SELECT zentao_bug_id, project_id FROM entries WHERE id=?', [(int)$id]);
+        self::checkEntryAccess($entry);
         if ($entry['zentao_bug_id'] ?? null) {
             $state = ZentaoController::fetchBugState((int)$entry['zentao_bug_id']);
             if (!($state['error'] ?? null)) {
@@ -436,5 +446,12 @@ class ZentaoSyncController
         }
         flash('info', 'Zentao change notification dismissed.');
         redirect('/entries/' . $id);
+    }
+
+    private static function checkEntryAccess(?array $entry): void {
+        if (!$entry || Auth::isAdmin()) return;
+        $ids = Auth::groupProjectIds();
+        $pid = $entry['project_id'] ?? null;
+        if ($pid && $ids !== null && !in_array((int)$pid, $ids, true)) abort(403, 'No access to this project');
     }
 }

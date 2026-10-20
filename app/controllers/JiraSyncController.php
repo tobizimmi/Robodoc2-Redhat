@@ -41,11 +41,13 @@ class JiraSyncController
         if (!$sourceType || !$sourceId) { echo json_encode(['error' => 'Missing params']); exit; }
 
         $table = $sourceType === 'entry' ? 'entries' : 'test_requests';
+        $extraCol = $sourceType === 'entry' ? ', project_id' : '';
         $rec   = Database::fetchOne(
-            "SELECT id, jira_issue_key, jira_synced_at, jira_has_changes FROM $table WHERE id=?",
+            "SELECT id, jira_issue_key, jira_synced_at, jira_has_changes$extraCol FROM $table WHERE id=?",
             [$sourceId]
         );
         if (!$rec || !$rec['jira_issue_key']) { echo json_encode(['error' => 'No Jira issue linked']); exit; }
+        if ($sourceType === 'entry') self::checkEntryAccess($rec);
 
         [$result] = self::checkOneRecord($table, $rec);
         echo json_encode($result);
@@ -102,6 +104,7 @@ class JiraSyncController
             [(int)$id]
         );
         if (!$entry || !$entry['jira_issue_key']) abort(404);
+        self::checkEntryAccess($entry);
 
         $state = JiraController::fetchIssueState($entry['jira_issue_key']);
         $existingCommentIds = array_column(
@@ -228,6 +231,7 @@ class JiraSyncController
         Auth::verifyCsrf();
         $entry = Database::fetchOne('SELECT * FROM entries WHERE id=?', [(int)$id]);
         if (!$entry || !$entry['jira_issue_key']) abort(404);
+        self::checkEntryAccess($entry);
 
         $state = JiraController::fetchIssueState($entry['jira_issue_key']);
         if ($state['error'] ?? null) {
@@ -378,7 +382,9 @@ class JiraSyncController
         Auth::require();
         Auth::verifyCsrf();
         session_write_close();
-        if (!Database::fetchOne('SELECT id FROM entries WHERE id=?', [(int)$id])) abort(404);
+        $entryRow = Database::fetchOne('SELECT id, project_id FROM entries WHERE id=?', [(int)$id]);
+        if (!$entryRow) abort(404);
+        self::checkEntryAccess($entryRow);
 
         [, , $authHeader, $err] = JiraController::resolveAuth();
         if ($err) { flash('error', $err); redirect('/jira-sync/entry/' . $id); }
@@ -490,6 +496,7 @@ class JiraSyncController
         Auth::verifyCsrf();
         $entry = JiraController::fetchEntry((int)$id);
         if (!$entry || !$entry['jira_issue_key']) abort(404);
+        self::checkEntryAccess($entry);
 
         $user     = Database::fetchOne('SELECT jira_title_template, jira_desc_template FROM users WHERE id=?', [Auth::id()]);
         $titleTpl = ($user['jira_title_template'] ?? '') ?: (appSetting('jira_default_title_template') ?: '[{{type}}] {{title}}');
@@ -523,7 +530,8 @@ class JiraSyncController
     {
         Auth::require();
         Auth::verifyCsrf();
-        $entry = Database::fetchOne('SELECT jira_issue_key FROM entries WHERE id=?', [(int)$id]);
+        $entry = Database::fetchOne('SELECT jira_issue_key, project_id FROM entries WHERE id=?', [(int)$id]);
+        self::checkEntryAccess($entry);
         // Store Jira's actual updated_at so we don't re-flag the same update
         $syncedAt = date('Y-m-d H:i:s');
         if ($entry['jira_issue_key'] ?? null) {
@@ -561,8 +569,9 @@ class JiraSyncController
         Auth::require();
         Auth::verifyCsrf();
         header('Content-Type: application/json');
-        $entry = Database::fetchOne('SELECT jira_issue_key FROM entries WHERE id=?', [(int)$id]);
+        $entry = Database::fetchOne('SELECT jira_issue_key, project_id FROM entries WHERE id=?', [(int)$id]);
         if (!$entry || !$entry['jira_issue_key']) { echo json_encode(['error' => 'No Jira issue linked']); exit; }
+        self::checkEntryAccess($entry);
         $state = JiraController::fetchIssueState($entry['jira_issue_key']);
         if ($state['error'] ?? null) { echo json_encode(['error' => $state['error']]); exit; }
         $comments = $state['comments'] ?? [];
@@ -622,7 +631,8 @@ class JiraSyncController
             ));
         }
 
-        $projects   = Database::fetchAll('SELECT id, name FROM projects ORDER BY name');
+        [$pSql, $pParams] = Auth::projectAccessClause();
+        $projects   = Database::fetchAll("SELECT id, name FROM projects WHERE $pSql ORDER BY name", $pParams);
         $entryTypes = Database::fetchAll('SELECT id, name FROM entry_types ORDER BY sort_order, name');
         $jiraUrl    = rtrim(appSetting('jira_url', ''), '/');
         View::render('jira-sync/unlinked', compact('issues', 'dismissed', 'error', 'jql', 'projectKey', 'jiraUrl', 'projects', 'entryTypes') + ['title' => 'Unlinked Jira Issues']);
@@ -661,6 +671,9 @@ class JiraSyncController
         $issueKey = strtoupper(trim($_POST['issue_key'] ?? ''));
         $entryId  = (int)($_POST['entry_id'] ?? 0);
         if (!$issueKey || !$entryId) { echo json_encode(['error' => 'Missing issue_key or entry_id']); exit; }
+        $entry = Database::fetchOne('SELECT id, project_id FROM entries WHERE id=?', [$entryId]);
+        if (!$entry) { echo json_encode(['error' => 'Entry not found']); exit; }
+        self::checkEntryAccess($entry);
 
         $jiraBase = rtrim(appSetting('jira_url', ''), '/');
         $issueUrl = "$jiraBase/browse/$issueKey";
@@ -684,6 +697,7 @@ class JiraSyncController
             flash('error', 'Issue key, project and entry type are required.');
             redirect('/jira-unlinked');
         }
+        self::checkEntryAccess(['project_id' => $projectId]);
 
         // Fetch issue from Jira to get title + description
         $state = JiraController::fetchIssueState($issueKey);
@@ -758,6 +772,7 @@ class JiraSyncController
         if (!$items || !$projectId || !$typeId) {
             json(['error' => 'Items, project and type are required.'], 400);
         }
+        self::checkEntryAccess(['project_id' => $projectId]);
 
         $jiraBase = rtrim(appSetting('jira_url', ''), '/');
         $created  = 0;
@@ -813,5 +828,12 @@ class JiraSyncController
         }
 
         json(['success' => true, 'created' => $created, 'errors' => $errors]);
+    }
+
+    private static function checkEntryAccess(?array $entry): void {
+        if (!$entry || Auth::isAdmin()) return;
+        $ids = Auth::groupProjectIds();
+        $pid = $entry['project_id'] ?? null;
+        if ($pid && $ids !== null && !in_array((int)$pid, $ids, true)) abort(403, 'No access to this project');
     }
 }
