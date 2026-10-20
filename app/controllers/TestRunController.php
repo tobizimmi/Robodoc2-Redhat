@@ -119,6 +119,9 @@ class TestRunController {
             $name    = trim($_POST['name'] ?? '');
             $cycleId = (int)($_POST['test_cycle_id'] ?? 0);
             if (!$planId || !$name) { flash('error', 'Test plan and name are required.'); redirect('/test-runs/create'); }
+            $plan = Database::fetchOne('SELECT id, project_id FROM test_plans WHERE id=?', [$planId]);
+            if (!$plan) abort(404);
+            self::checkAccess($plan);
             // A Test Run always belongs to a Test Cycle now - the cycle is the
             // container (e.g. "Sprint 23 Regression"), the run is one scoped
             // pass through some of its test cases.
@@ -153,7 +156,11 @@ class TestRunController {
             flash('success', 'Test run started with ' . count($validItems) . ' test case(s).');
             redirect('/test-runs/' . $runId);
         }
-        $plans = Database::fetchAll("SELECT tp.id, tp.name, p.name project_name FROM test_plans tp LEFT JOIN projects p ON p.id=tp.project_id ORDER BY tp.name");
+        [$accessSql, $accessParams] = self::projectClause('tp');
+        $plans = Database::fetchAll(
+            "SELECT tp.id, tp.name, p.name project_name FROM test_plans tp LEFT JOIN projects p ON p.id=tp.project_id WHERE $accessSql ORDER BY tp.name",
+            $accessParams
+        );
         View::render('test-runs/create', ['plans' => $plans, 'title' => 'New Test Run']);
     }
 
@@ -178,6 +185,7 @@ class TestRunController {
     public static function delete(string $id): void {
         Auth::requireEdit('testing');
         Auth::verifyCsrf();
+        self::findOr404((int)$id);
         Database::execute('DELETE FROM test_runs WHERE id = ?', [(int)$id]);
         flash('success', 'Test run deleted.');
         redirect('/test-runs');
@@ -186,6 +194,7 @@ class TestRunController {
     public static function updateResult(string $id, string $rid): void {
         Auth::requireEdit('testing');
         Auth::verifyCsrf();
+        self::findOr404((int)$id);
         $status = $_POST['status'] ?? 'pending';
         $notes  = trim($_POST['notes'] ?? '');
         $link   = trim($_POST['report_link'] ?? '');
@@ -226,6 +235,7 @@ class TestRunController {
     // -- Download the manually-created test report attached to a result. --
     public static function downloadReport(string $id, string $rid): void {
         Auth::requireView('testing');
+        self::findOr404((int)$id);
         $result = Database::fetchOne(
             'SELECT report_file_path, report_file_name FROM test_run_results WHERE id=? AND test_run_id=?',
             [(int)$rid, (int)$id]
@@ -363,6 +373,7 @@ class TestRunController {
         Auth::requireEdit('testing');
         header('Content-Type: application/json');
         Auth::verifyCsrf();
+        self::findOr404((int)$id);
         $key = strtoupper(trim($_POST['pql_issue_key'] ?? ''));
         if ($key === '') {
             Database::execute('UPDATE test_run_results SET pql_issue_key=NULL, pql_status=NULL, pql_synced_at=NULL WHERE id=? AND test_run_id=?', [(int)$rid, (int)$id]);
@@ -386,6 +397,7 @@ class TestRunController {
         Auth::requireEdit('testing');
         header('Content-Type: application/json');
         Auth::verifyCsrf();
+        self::findOr404((int)$id);
         $result2 = Database::fetchOne('SELECT pql_issue_key FROM test_run_results WHERE id=? AND test_run_id=?', [(int)$rid, (int)$id]);
         if (!$result2 || !$result2['pql_issue_key']) {
             echo json_encode(['error' => 'No PQL ticket linked.']);
@@ -404,6 +416,7 @@ class TestRunController {
         Auth::requireEdit('testing');
         header('Content-Type: application/json');
         Auth::verifyCsrf();
+        self::findOr404((int)$id);
         $userId = (int)($_POST['user_id'] ?? 0) ?: null;
         Database::execute('UPDATE test_run_results SET assigned_tester=? WHERE id=? AND test_run_id=?', [$userId, (int)$rid, (int)$id]);
         $user = $userId ? Database::fetchOne('SELECT name FROM users WHERE id=?', [$userId]) : null;
@@ -416,6 +429,7 @@ class TestRunController {
         Auth::requireEdit('testing');
         header('Content-Type: application/json');
         Auth::verifyCsrf();
+        self::findOr404((int)$id);
         $entryId = (int)($_POST['entry_id'] ?? 0) ?: null;
         $jiraKey = trim($_POST['jira_key'] ?? '');
         if (!$entryId && !$jiraKey) { http_response_code(422); echo json_encode(['error' => 'Entry or Jira key required']); exit; }
@@ -434,6 +448,7 @@ class TestRunController {
         Auth::requireEdit('testing');
         header('Content-Type: application/json');
         Auth::verifyCsrf();
+        self::findOr404((int)$id);
         Database::execute('DELETE FROM test_run_bugs WHERE id=? AND test_run_result_id=?', [(int)$bid, (int)$rid]);
         echo json_encode(['success' => true]);
         exit;
@@ -473,6 +488,7 @@ class TestRunController {
     public static function removeItem(string $id, string $rid): void {
         Auth::requireEdit('testing');
         Auth::verifyCsrf();
+        self::findOr404((int)$id);
         Database::execute('DELETE FROM test_run_results WHERE id=? AND test_run_id=?', [(int)$rid, (int)$id]);
         flash('success', 'Test case removed from run.');
         redirect('/test-runs/' . $id);
@@ -480,7 +496,7 @@ class TestRunController {
 
     private static function findOr404(int $id): array {
         $r = Database::fetchOne(
-            "SELECT tr.*, tp.name plan_name, p.name project_name,
+            "SELECT tr.*, tp.name plan_name, p.name project_name, tp.project_id,
                     tc.name cycle_name, tc.id cycle_id_val, tp.xray_key plan_xray_key
              FROM test_runs tr
              LEFT JOIN test_plans tp ON tp.id=tr.test_plan_id
@@ -490,6 +506,27 @@ class TestRunController {
             [$id]
         );
         if (!$r) abort(404, 'Test run not found');
+        // Centralized here so every caller (show/edit/delete/results/bugs/...)
+        // gets the same project-scoping as Test Plans/Test Cycles - this used
+        // to be entirely missing, so anyone who could use the Testing module
+        // at all could view/edit/delete any run in any project by its id.
+        self::checkAccess($r);
         return $r;
+    }
+
+    private static function checkAccess(array $row): void {
+        if (Auth::isAdmin()) return;
+        $pid = $row['project_id'] ?? null;
+        if (!$pid) return;
+        $ids = Auth::groupProjectIds();
+        if ($ids !== null && !in_array((int)$pid, $ids, true)) abort(403, 'No access to this project');
+    }
+
+    private static function projectClause(string $alias): array {
+        $ids = Auth::groupProjectIds();
+        if ($ids === null) return ['1=1', []];
+        if (empty($ids)) return ["$alias.project_id IS NULL", []];
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+        return ["($alias.project_id IS NULL OR $alias.project_id IN ($ph))", $ids];
     }
 }

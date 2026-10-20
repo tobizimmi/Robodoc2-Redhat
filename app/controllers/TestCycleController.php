@@ -13,8 +13,9 @@ class TestCycleController
         $environment = trim($_POST['environment'] ?? '');
         $build       = trim($_POST['build'] ?? '');
         if (!$name) { flash('error', 'Name required.'); redirect('/test-plans/' . $planId); }
-        $plan = Database::fetchOne('SELECT id FROM test_plans WHERE id=?', [(int)$planId]);
+        $plan = Database::fetchOne('SELECT id, project_id FROM test_plans WHERE id=?', [(int)$planId]);
         if (!$plan) abort(404);
+        self::checkAccess($plan);
         $cycleId = Database::insert(
             'INSERT INTO test_cycles (test_plan_id, name, description, environment, build, status, created_by) VALUES (?,?,?,?,?,?,?)',
             [(int)$planId, $name, $description, $environment, $build, 'planned', Auth::id()]
@@ -27,8 +28,12 @@ class TestCycleController
     {
         Auth::requireEdit('testing');
         Auth::verifyCsrf();
-        $cycle = Database::fetchOne('SELECT * FROM test_cycles WHERE id=?', [(int)$id]);
+        $cycle = Database::fetchOne(
+            'SELECT tc.*, tp.project_id FROM test_cycles tc LEFT JOIN test_plans tp ON tp.id = tc.test_plan_id WHERE tc.id=?',
+            [(int)$id]
+        );
         if (!$cycle) abort(404);
+        self::checkAccess($cycle);
         Database::execute('DELETE FROM test_cycles WHERE id=?', [(int)$id]);
         flash('success', 'Test Cycle deleted.');
         redirect('/test-plans/' . $cycle['test_plan_id']);
@@ -37,9 +42,14 @@ class TestCycleController
     public static function index(): void
     {
         Auth::requireView('testing');
-        // Load all plans with their cycles and run stats
+        // Load all plans with their cycles and run stats - scoped to the
+        // projects this user may access, same as Test Plans itself (this
+        // query used to be unscoped, leaking every other project's plans,
+        // cycles and runs into the Test Cycles overview).
+        [$accessSql, $accessParams] = self::projectClause('tp');
         $plans = Database::fetchAll(
-            'SELECT tp.*, p.name project_name FROM test_plans tp LEFT JOIN projects p ON p.id=tp.project_id ORDER BY p.name, tp.name'
+            "SELECT tp.*, p.name project_name FROM test_plans tp LEFT JOIN projects p ON p.id=tp.project_id WHERE $accessSql ORDER BY p.name, tp.name",
+            $accessParams
         );
         $planIds = array_column($plans, 'id');
         $cyclesByPlan = [];
@@ -61,9 +71,11 @@ class TestCycleController
                 foreach ($runs as $run) { $runsByCycle[$run['test_cycle_id']][] = $run; }
             }
         }
-        // Legacy runs without a cycle
+        // Legacy runs without a cycle - same project scoping as above.
+        [$legacyAccessSql, $legacyAccessParams] = self::projectClause('tp');
         $legacyRuns = Database::fetchAll(
-            "SELECT tr.*, tp.name plan_name, COUNT(trr.id) rc, SUM(trr.status='passed') p, SUM(trr.status='failed') f FROM test_runs tr LEFT JOIN test_plans tp ON tp.id=tr.test_plan_id LEFT JOIN test_run_results trr ON trr.test_run_id=tr.id WHERE tr.test_cycle_id IS NULL GROUP BY tr.id ORDER BY tr.created_at DESC"
+            "SELECT tr.*, tp.name plan_name, COUNT(trr.id) rc, SUM(trr.status='passed') p, SUM(trr.status='failed') f FROM test_runs tr LEFT JOIN test_plans tp ON tp.id=tr.test_plan_id LEFT JOIN test_run_results trr ON trr.test_run_id=tr.id WHERE tr.test_cycle_id IS NULL AND $legacyAccessSql GROUP BY tr.id ORDER BY tr.created_at DESC",
+            $legacyAccessParams
         );
         View::render('test-cycles/index', compact('plans', 'cyclesByPlan', 'runsByCycle', 'legacyRuns') + ['title' => 'Test Cycles']);
     }
@@ -72,13 +84,14 @@ class TestCycleController
     {
         Auth::requireView('testing');
         $cycle = Database::fetchOne(
-            'SELECT tc.*, tp.name plan_name, tp.id plan_id, tp.xray_key plan_xray_key
+            'SELECT tc.*, tp.name plan_name, tp.id plan_id, tp.xray_key plan_xray_key, tp.project_id
              FROM test_cycles tc
              LEFT JOIN test_plans tp ON tp.id = tc.test_plan_id
              WHERE tc.id=?',
             [(int)$id]
         );
         if (!$cycle) abort(404, 'Test Cycle not found');
+        self::checkAccess($cycle);
 
         // Runs with result stats (no executed_by on test_runs)
         $runs = Database::fetchAll(
@@ -150,8 +163,12 @@ class TestCycleController
     public static function editCycle(string $id): void
     {
         Auth::requireEdit('testing');
-        $cycle = Database::fetchOne('SELECT * FROM test_cycles WHERE id=?', [(int)$id]);
+        $cycle = Database::fetchOne(
+            'SELECT tc.*, tp.project_id FROM test_cycles tc LEFT JOIN test_plans tp ON tp.id = tc.test_plan_id WHERE tc.id=?',
+            [(int)$id]
+        );
         if (!$cycle) abort(404);
+        self::checkAccess($cycle);
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Auth::verifyCsrf();
             Database::execute('UPDATE test_cycles SET name=?, description=?, environment=?, build=?, status=? WHERE id=?',
@@ -167,9 +184,22 @@ class TestCycleController
         Auth::requireEdit('testing');
         header('Content-Type: application/json');
         Auth::verifyCsrf();
+        $run = Database::fetchOne(
+            'SELECT tr.test_plan_id, tp.project_id FROM test_runs tr LEFT JOIN test_plans tp ON tp.id = tr.test_plan_id WHERE tr.id=?',
+            [(int)$id]
+        );
+        if (!$run) { http_response_code(404); echo json_encode(['error' => 'Test run not found']); exit; }
+        self::checkAccess($run);
         $cycleId = (int)($_POST['cycle_id'] ?? 0) ?: null;
+        $cycle = null;
+        if ($cycleId) {
+            // Must belong to the same plan as the run - otherwise a user with
+            // access to this run could pull in a cycle name/id from a
+            // completely different (possibly inaccessible) plan or project.
+            $cycle = Database::fetchOne('SELECT name FROM test_cycles WHERE id=? AND test_plan_id=?', [$cycleId, $run['test_plan_id']]);
+            if (!$cycle) { http_response_code(422); echo json_encode(['error' => 'That cycle does not belong to this run\'s plan.']); exit; }
+        }
         Database::execute('UPDATE test_runs SET test_cycle_id=? WHERE id=?', [$cycleId, (int)$id]);
-        $cycle = $cycleId ? Database::fetchOne('SELECT name FROM test_cycles WHERE id=?', [$cycleId]) : null;
         echo json_encode(['success' => true, 'cycle_name' => $cycle['name'] ?? '']);
         exit;
     }
@@ -179,6 +209,18 @@ class TestCycleController
         Auth::requireEdit('testing');
         header('Content-Type: application/json');
         Auth::verifyCsrf();
+        $cycle = Database::fetchOne(
+            'SELECT tc.id, tp.project_id FROM test_cycles tc LEFT JOIN test_plans tp ON tp.id = tc.test_plan_id WHERE tc.id=?',
+            [(int)$id]
+        );
+        if (!$cycle) { http_response_code(404); echo json_encode(['error' => 'Test Cycle not found']); exit; }
+        if (!Auth::isAdmin()) {
+            $ids = Auth::groupProjectIds();
+            $pid = $cycle['project_id'] ?? null;
+            if ($pid && $ids !== null && !in_array((int)$pid, $ids, true)) {
+                http_response_code(403); echo json_encode(['error' => 'No access to this project']); exit;
+            }
+        }
         $status = $_POST['status'] ?? '';
         $allowed = ['planned','active','completed','aborted'];
         if (!in_array($status, $allowed)) { http_response_code(422); echo json_encode(['error' => 'Invalid status']); exit; }
@@ -193,11 +235,35 @@ class TestCycleController
         header('Content-Type: application/json');
         $planId = (int)($_GET['plan_id'] ?? 0);
         if (!$planId) { echo json_encode([]); exit; }
+        $plan = Database::fetchOne('SELECT project_id FROM test_plans WHERE id=?', [$planId]);
+        if (!$plan) { echo json_encode([]); exit; }
+        if (!Auth::isAdmin()) {
+            $ids = Auth::groupProjectIds();
+            $pid = $plan['project_id'] ?? null;
+            if ($pid && $ids !== null && !in_array((int)$pid, $ids, true)) { echo json_encode([]); exit; }
+        }
         $cycles = Database::fetchAll(
             'SELECT id, name, status FROM test_cycles WHERE test_plan_id=? ORDER BY created_at DESC',
             [$planId]
         );
         echo json_encode($cycles);
         exit;
+    }
+
+    // -- Project access helpers (same pattern as TestPlanController) --------
+    private static function checkAccess(array $row): void {
+        if (Auth::isAdmin()) return;
+        $pid = $row['project_id'] ?? null;
+        if (!$pid) return;
+        $ids = Auth::groupProjectIds();
+        if ($ids !== null && !in_array((int)$pid, $ids, true)) abort(403, 'No access to this project');
+    }
+
+    private static function projectClause(string $alias): array {
+        $ids = Auth::groupProjectIds();
+        if ($ids === null) return ['1=1', []];
+        if (empty($ids)) return ["$alias.project_id IS NULL", []];
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+        return ["($alias.project_id IS NULL OR $alias.project_id IN ($ph))", $ids];
     }
 }

@@ -7,10 +7,13 @@ class SprintController
     public static function index(): void
     {
         Auth::requireView('sprint');
+        // Aggregate counts only over entries this user can actually see, so
+        // they match what the sprint's own detail/board page shows.
+        [$accessClause, $accessParams] = Auth::entryAccessClause('e');
         $sprints = Database::fetchAll(
             "SELECT s.*,
                     u.name creator_name,
-                    COUNT(se.entry_id) total_entries,
+                    COUNT(e.id) total_entries,
                     SUM(CASE WHEN e.status IN ('finished','finalized') THEN 1 ELSE 0 END) done_entries,
                     SUM(CASE WHEN e.status = 'rejected' THEN 1 ELSE 0 END) rejected_entries,
                     SUM(se.story_points) total_points,
@@ -18,8 +21,9 @@ class SprintController
              FROM sprints s
              LEFT JOIN users u ON u.id = s.created_by
              LEFT JOIN sprint_entries se ON se.sprint_id = s.id
-             LEFT JOIN entries e ON e.id = se.entry_id
-             GROUP BY s.id ORDER BY s.status='planning' DESC, s.status='active' DESC, s.start_date DESC, s.id DESC"
+             LEFT JOIN entries e ON e.id = se.entry_id AND $accessClause
+             GROUP BY s.id ORDER BY s.status='planning' DESC, s.status='active' DESC, s.start_date DESC, s.id DESC",
+            $accessParams
         );
         View::render('sprints/index', ['sprints' => $sprints, 'title' => 'Sprints']);
     }
@@ -87,6 +91,7 @@ class SprintController
         // Entries NOT yet in this sprint ? for the "Add Tickets" tab
         $alreadyIn   = array_column($entries, 'id');
         $excludeSql  = $alreadyIn ? 'AND e.id NOT IN (' . implode(',', array_fill(0, count($alreadyIn), '?')) . ')' : '';
+        [$accessClause, $accessParams] = Auth::entryAccessClause();
         $available   = Database::fetchAll(
             "SELECT e.id, e.title, e.status, e.priority, e.entry_date,
                     e.jira_issue_key,
@@ -97,14 +102,15 @@ class SprintController
              LEFT JOIN entry_types et ON et.id = e.entry_type_id
              LEFT JOIN error_categories ec ON ec.id = e.error_category_id
              LEFT JOIN projects p ON p.id = e.project_id
-             WHERE (e.is_test_entry = 0 OR e.is_test_entry IS NULL) $excludeSql
+             WHERE (e.is_test_entry = 0 OR e.is_test_entry IS NULL) AND $accessClause $excludeSql
              ORDER BY e.entry_date DESC, e.id DESC
              LIMIT 300",
-            $alreadyIn ?: []
+            array_merge($accessParams, $alreadyIn ?: [])
         );
 
-        // All projects for filter
-        $projects = Database::fetchAll('SELECT id, name FROM projects ORDER BY name');
+        // Projects for filter - only the ones this user can access.
+        [$pSql, $pParams] = Auth::projectAccessClause();
+        $projects = Database::fetchAll("SELECT id, name FROM projects WHERE $pSql ORDER BY name", $pParams);
 
         View::render('sprints/show', compact('sprint', 'entries', 'board', 'stats', 'otherSprints', 'available', 'projects') + ['title' => $sprint['name']]);
     }
@@ -173,6 +179,18 @@ class SprintController
         Auth::requireEdit('sprint'); Auth::verifyCsrf();
         self::findOr404((int)$id);
         $entryIds = array_filter(array_map('intval', (array)($_POST['entry_ids'] ?? [])));
+        // Re-check each id against the user's actual entry access, not just
+        // trust the submitted list - otherwise a crafted request could pull
+        // an entry from an inaccessible project into a visible sprint.
+        if ($entryIds) {
+            [$accessClause, $accessParams] = Auth::entryAccessClause();
+            $ph = implode(',', array_fill(0, count($entryIds), '?'));
+            $allowed = Database::fetchAll(
+                "SELECT e.id FROM entries e WHERE e.id IN ($ph) AND $accessClause",
+                array_merge($entryIds, $accessParams)
+            );
+            $entryIds = array_column($allowed, 'id');
+        }
         $added    = 0;
         foreach ($entryIds as $eid) {
             try {
@@ -280,6 +298,11 @@ class SprintController
 
     private static function sprintEntries(int $sprintId): array
     {
+        // A sprint itself isn't owned by one project - it's a cross-project
+        // container of tickets - but the entries inside it still are, so the
+        // board must only surface the ones this user may actually see,
+        // exactly like the main Entries list does.
+        [$accessClause, $accessParams] = Auth::entryAccessClause();
         return Database::fetchAll(
             "SELECT e.id, e.title, e.status, e.priority, e.entry_date,
                     e.jira_issue_key, e.jira_status,
@@ -295,9 +318,9 @@ class SprintController
              LEFT JOIN error_categories ec ON ec.id = e.error_category_id
              LEFT JOIN projects p ON p.id = e.project_id
              LEFT JOIN users u ON u.id = e.created_by
-             WHERE se.sprint_id = ?
+             WHERE se.sprint_id = ? AND $accessClause
              ORDER BY se.is_top DESC, se.sort_order, e.priority DESC, se.added_at",
-            [$sprintId]
+            array_merge([$sprintId], $accessParams)
         );
     }
 

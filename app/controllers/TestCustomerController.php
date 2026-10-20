@@ -7,7 +7,9 @@ class TestCustomerController
     public static function index(): void
     {
         Auth::requireView('entries');
-        $projects = Database::fetchAll("SELECT id, name, color FROM projects WHERE status='active' ORDER BY name");
+        [$pSql, $pParams] = Auth::projectAccessClause('p');
+        $projects = Database::fetchAll("SELECT id, name, color FROM projects p WHERE status='active' AND $pSql ORDER BY name", $pParams);
+        [$accessSql, $accessParams] = self::projectClause('o');
         $orders   = Database::fetchAll(
             "SELECT o.*, p.name project_name, p.color project_color, u.name creator_name,
                     (SELECT COUNT(*) FROM test_customer_feedback f WHERE f.order_id = o.id) feedback_count,
@@ -16,7 +18,9 @@ class TestCustomerController
              FROM test_customer_orders o
              LEFT JOIN projects p ON p.id = o.project_id
              LEFT JOIN users u    ON u.id = o.created_by
-             ORDER BY o.created_at DESC"
+             WHERE $accessSql
+             ORDER BY o.created_at DESC",
+            $accessParams
         );
         View::render('test-customers/index', compact('orders', 'projects'), 'app');
     }
@@ -32,6 +36,7 @@ class TestCustomerController
              WHERE o.id = ?", [(int)$id]
         );
         if (!$order) { http_response_code(404); echo 'Not found'; return; }
+        self::checkAccess($order);
 
         $feedback = Database::fetchAll(
             "SELECT f.*, u.name reviewer_name
@@ -64,6 +69,7 @@ class TestCustomerController
         $projectId = (int)($_POST['project_id'] ?? 0);
         $desc      = trim($_POST['description'] ?? '');
         if (!$title || !$projectId) { redirect('/test-customers'); }
+        self::checkAccess(['project_id' => $projectId]);
         $token = bin2hex(random_bytes(16));
         $id = Database::insert(
             "INSERT INTO test_customer_orders (project_id, title, description, feedback_instructions, status, qr_token, created_by) VALUES (?,?,?,?,?,?,?)",
@@ -77,6 +83,7 @@ class TestCustomerController
     {
         Auth::requireEdit('entries');
         Auth::verifyCsrf();
+        self::checkOrderAccess((int)$id);
         $title        = trim($_POST['title'] ?? '');
         $desc         = trim($_POST['description'] ?? '');
         $instructions = trim($_POST['feedback_instructions'] ?? '');
@@ -93,6 +100,7 @@ class TestCustomerController
     {
         Auth::requireEdit('entries');
         Auth::verifyCsrf();
+        self::checkOrderAccess((int)$orderId);
         $label  = trim($_POST['label'] ?? '');
         $number = trim($_POST['customer_number'] ?? '');
         $email  = trim($_POST['email'] ?? '') ?: null;
@@ -109,6 +117,7 @@ class TestCustomerController
     {
         Auth::requireEdit('entries');
         Auth::verifyCsrf();
+        self::checkOrderAccess((int)$orderId);
         Database::execute(
             'DELETE FROM test_customer_respondents WHERE id=? AND order_id=?',
             [(int)$rid, (int)$orderId]
@@ -223,6 +232,7 @@ class TestCustomerController
     {
         Auth::requireEdit('entries');
         Auth::verifyCsrf();
+        self::checkOrderAccess((int)$id);
         Database::execute("DELETE FROM test_customer_feedback WHERE order_id=?", [(int)$id]);
         Database::execute("DELETE FROM questionnaire_responses WHERE questionnaire_id IN (SELECT id FROM questionnaires WHERE order_id=?)", [(int)$id]);
         Database::execute("DELETE FROM questionnaires WHERE order_id=?", [(int)$id]);
@@ -347,8 +357,9 @@ class TestCustomerController
         $page      = max(1, (int)($_GET['page'] ?? 1));
         $perPage   = 50;
 
-        $where  = ['1=1'];
-        $params = [];
+        [$accessSql, $accessParams] = self::projectClause('o');
+        $where  = [$accessSql];
+        $params = $accessParams;
         if ($fOrder)    { $where[] = 'f.order_id = ?';             $params[] = $fOrder; }
         if ($fCustomer) { $where[] = 'r.test_customer_id = ?';     $params[] = $fCustomer; }
         if ($fStatus)   { $where[] = 'f.status = ?';               $params[] = $fStatus; }
@@ -357,6 +368,7 @@ class TestCustomerController
 
         $total = (int)(Database::fetchOne(
             "SELECT COUNT(*) c FROM test_customer_feedback f
+             LEFT JOIN test_customer_orders o ON o.id = f.order_id
              LEFT JOIN test_customer_respondents r ON r.id = f.respondent_id
              WHERE $wStr", $params
         )['c'] ?? 0);
@@ -405,6 +417,7 @@ class TestCustomerController
             [(int)$fbId, (int)$orderId]
         );
         if (!$order || !$fb) { http_response_code(404); echo 'Not found'; return; }
+        self::checkAccess($order);
         $entryTypes = Database::fetchAll('SELECT id, name FROM entry_types ORDER BY sort_order, name');
         // Load respondent if feedback was submitted via personal link
         $respondent = null;
@@ -439,6 +452,7 @@ class TestCustomerController
     {
         Auth::requireEdit('entries');
         Auth::verifyCsrf();
+        self::checkOrderAccess((int)$orderId);
         Database::execute(
             'UPDATE test_customer_feedback SET status=\'pending\', reviewed_by=NULL, reviewed_at=NULL WHERE id=? AND order_id=?',
             [(int)$fbId, (int)$orderId]
@@ -451,6 +465,7 @@ class TestCustomerController
     {
         Auth::requireEdit('entries');
         Auth::verifyCsrf();
+        self::checkOrderAccess((int)$orderId);
         // Delete attachments from disk
         $dir = __DIR__ . '/../../storage/tc-feedback/' . (int)$fbId . '/';
         if (is_dir($dir)) {
@@ -469,6 +484,7 @@ class TestCustomerController
     {
         Auth::requireEdit('entries');
         Auth::verifyCsrf();
+        self::checkOrderAccess((int)$orderId);
         $action = $_POST['action'] ?? 'review';
         if ($action === 'import') {
             $fb = Database::fetchOne("SELECT * FROM test_customer_feedback WHERE id=? AND order_id=?", [(int)$feedbackId, (int)$orderId]);
@@ -609,6 +625,7 @@ class TestCustomerController
     {
         Auth::requireEdit('entries');
         Auth::verifyCsrf();
+        self::checkOrderAccess((int)$orderId);
         $title       = trim($_POST['title'] ?? '');
         $desc        = trim($_POST['description'] ?? '');
         $templateId  = (int)($_POST['template_id'] ?? 0);
@@ -638,6 +655,7 @@ class TestCustomerController
     {
         Auth::requireEdit('entries');
         Auth::verifyCsrf();
+        self::checkOrderAccess((int)$orderId);
         // Only editable in draft mode
         $q = Database::fetchOne('SELECT draft_mode FROM questionnaires WHERE id=? AND order_id=?', [(int)$qId, (int)$orderId]);
         if (!$q || !$q['draft_mode']) { redirect('/test-customers/' . $orderId); }
@@ -657,6 +675,7 @@ class TestCustomerController
     {
         Auth::requireEdit('entries');
         Auth::verifyCsrf();
+        self::checkOrderAccess((int)$orderId);
         // Delete all existing draft responses
         Database::execute('DELETE FROM questionnaire_responses WHERE questionnaire_id=?', [(int)$qId]);
         // Set draft_mode=0 (live)
@@ -713,6 +732,7 @@ class TestCustomerController
     public static function questionnaireResponses(string $orderId, string $questionnaireId): void
     {
         Auth::requireView('entries');
+        self::checkOrderAccess((int)$orderId);
         $q = Database::fetchOne("SELECT * FROM questionnaires WHERE id=? AND order_id=?", [(int)$questionnaireId, (int)$orderId]);
         if (!$q) { redirect('/test-customers/' . $orderId); }
         $q['questions'] = json_decode($q['questions'] ?: '[]', true);
@@ -729,6 +749,15 @@ class TestCustomerController
     public static function serveFile(string $fbId, string $filename): void
     {
         Auth::requireView('entries');
+        // Resolve the feedback's order to enforce project access - this used
+        // to serve any attachment by guessing the feedback id, regardless of
+        // which project (or order) it actually belonged to.
+        $order = Database::fetchOne(
+            'SELECT o.project_id FROM test_customer_feedback f JOIN test_customer_orders o ON o.id = f.order_id WHERE f.id=?',
+            [(int)$fbId]
+        );
+        if (!$order) { http_response_code(404); echo 'Not found'; return; }
+        self::checkAccess($order);
         // Sanitize filename — no path traversal
         $filename = basename($filename);
         $path     = __DIR__ . '/../../storage/tc-feedback/' . (int)$fbId . '/' . $filename;
@@ -784,5 +813,29 @@ class TestCustomerController
         header('Content-Length: ' . strlen($img));
         echo $img;
         exit;
+    }
+
+    // -- Project access helpers (same pattern as TestPlanController/TestCycleController) --
+    private static function checkAccess(array $row): void {
+        if (Auth::isAdmin()) return;
+        $pid = $row['project_id'] ?? null;
+        if (!$pid) return;
+        $ids = Auth::groupProjectIds();
+        if ($ids !== null && !in_array((int)$pid, $ids, true)) abort(403, 'No access to this project');
+    }
+
+    private static function checkOrderAccess(int $orderId): array {
+        $order = Database::fetchOne('SELECT project_id FROM test_customer_orders WHERE id=?', [$orderId]);
+        if (!$order) abort(404, 'Order not found');
+        self::checkAccess($order);
+        return $order;
+    }
+
+    private static function projectClause(string $alias): array {
+        $ids = Auth::groupProjectIds();
+        if ($ids === null) return ['1=1', []];
+        if (empty($ids)) return ["$alias.project_id IS NULL", []];
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+        return ["($alias.project_id IS NULL OR $alias.project_id IN ($ph))", $ids];
     }
 }

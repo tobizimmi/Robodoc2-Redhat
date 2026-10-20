@@ -8,15 +8,20 @@ class ConfluenceController
         Auth::requireView('confluence');
 
         $settings   = array_column(Database::fetchAll('SELECT setting_key, setting_value FROM app_settings'), 'setting_value', 'setting_key');
-        $projects   = Database::fetchAll("SELECT id, name, color FROM projects WHERE status='active' ORDER BY name");
+        [$pSql, $pParams] = Auth::projectAccessClause();
+        $projects   = Database::fetchAll("SELECT id, name, color FROM projects WHERE status='active' AND $pSql ORDER BY name", $pParams);
         $types      = Database::fetchAll('SELECT id, name, color FROM entry_types ORDER BY sort_order, name');
         $categories = Database::fetchAll('SELECT id, name FROM error_categories ORDER BY sort_order, name');
         $inventory  = Database::fetchAll('SELECT * FROM inventory_items ORDER BY name');
         $presets    = Database::fetchAll("SELECT * FROM user_presets WHERE user_id=? AND preset_type='entry_table' ORDER BY name", [Auth::id()]);
 
-        // Server-side entry filtering for Confluence export
-        $cfWhere  = ['e.is_merged = 0'];
-        $cfParams = [];
+        // Server-side entry filtering for Confluence export - always scoped
+        // to this user's accessible entries first; this list used to ignore
+        // project access entirely whenever no project filter was picked,
+        // showing every entry across every project in the export picker.
+        [$accessClause, $accessParams] = Auth::entryAccessClause();
+        $cfWhere  = ['e.is_merged = 0', $accessClause];
+        $cfParams = $accessParams;
         $cfFiltersActive = [];
         $colFilterMap = [
             'status'   => ['e.status',           'like'],
@@ -162,6 +167,19 @@ class ConfluenceController
             $html         = self::buildMowerHistoryHtml($serials, $mowerColumns);
         } else {
             $entryIds = array_map('intval', (array)($_POST['entry_ids'] ?? []));
+            // Re-check against this user's actual entry access - the ids
+            // come straight from the request, and without this a crafted
+            // submission could export entries from projects the user can't
+            // otherwise see into a Confluence page.
+            if ($entryIds) {
+                [$accessClause, $accessParams] = Auth::entryAccessClause();
+                $ph = implode(',', array_fill(0, count($entryIds), '?'));
+                $allowed = Database::fetchAll(
+                    "SELECT e.id FROM entries e WHERE e.id IN ($ph) AND $accessClause",
+                    array_merge($entryIds, $accessParams)
+                );
+                $entryIds = array_column($allowed, 'id');
+            }
             $columns  = (array)($_POST['columns'] ?? ['date', 'type', 'project', 'title', 'description', 'serial', 'firmware']);
             $entryImageMap = [];
             $html     = self::buildEntriesHtml($entryIds, $columns, $entryImageMap);
@@ -516,18 +534,24 @@ class ConfluenceController
 
     private static function buildInventoryHtml(array $itemIds, array $columns): string
     {
+        // Scoped to this user's accessible projects either way - the ids
+        // come straight from the request, and the "export everything"
+        // fallback used to ignore project access entirely.
+        [$pSql, $pParams] = self::projectClause('i');
         if ($itemIds) {
             $in    = implode(',', array_fill(0, count($itemIds), '?'));
             $items = Database::fetchAll(
                 "SELECT i.*, p.name project_name FROM inventory_items i
                  LEFT JOIN projects p ON p.id = i.project_id
-                 WHERE i.id IN ($in) ORDER BY i.name",
-                $itemIds
+                 WHERE i.id IN ($in) AND $pSql ORDER BY i.name",
+                array_merge($itemIds, $pParams)
             );
         } else {
             $items = Database::fetchAll(
-                'SELECT i.*, p.name project_name FROM inventory_items i
-                 LEFT JOIN projects p ON p.id = i.project_id ORDER BY i.name'
+                "SELECT i.*, p.name project_name FROM inventory_items i
+                 LEFT JOIN projects p ON p.id = i.project_id
+                 WHERE $pSql ORDER BY i.name",
+                $pParams
             );
         }
 
@@ -571,8 +595,12 @@ class ConfluenceController
 
     private static function buildMowerHistoryHtml(array $serials, array $entryColumns): string
     {
+        [$pSql, $pParams] = self::projectClause('i');
         if (empty($serials)) {
-            $rows    = Database::fetchAll("SELECT serial_number FROM inventory_items WHERE serial_number IS NOT NULL AND serial_number != '' ORDER BY name");
+            $rows    = Database::fetchAll(
+                "SELECT serial_number FROM inventory_items i WHERE serial_number IS NOT NULL AND serial_number != '' AND $pSql ORDER BY name",
+                $pParams
+            );
             $serials = array_column($rows, 'serial_number');
         }
 
@@ -594,17 +622,21 @@ class ConfluenceController
 
         $html = '<h2>Mower History</h2>';
 
+        [$entryAccessClause, $entryAccessParams] = Auth::entryAccessClause();
         foreach ($serials as $serial) {
-            $item    = Database::fetchOne(
-                'SELECT i.*, p.name project_name FROM inventory_items i LEFT JOIN projects p ON p.id = i.project_id WHERE i.serial_number = ?',
-                [$serial]
+            // Scoped so a mower in an inaccessible project doesn't leak its
+            // firmware/status/project name - if there's no matching
+            // (accessible) inventory record, $item just stays null as before.
+            $item = Database::fetchOne(
+                "SELECT i.*, p.name project_name FROM inventory_items i LEFT JOIN projects p ON p.id = i.project_id WHERE i.serial_number = ? AND $pSql",
+                array_merge([$serial], $pParams)
             );
             $entries = Database::fetchAll(
                 "SELECT e.*, et.name type_name FROM entries e
                  LEFT JOIN entry_types et ON et.id = e.entry_type_id
-                 WHERE e.mower_serial = ?
+                 WHERE e.mower_serial = ? AND $entryAccessClause
                  ORDER BY e.entry_date DESC, e.id DESC",
-                [$serial]
+                array_merge([$serial], $entryAccessParams)
             );
 
             $html .= '<h3>' . htmlspecialchars($serial);
@@ -689,5 +721,14 @@ class ConfluenceController
             CURLOPT_HTTPHEADER => $headers, CURLOPT_POSTFIELDS => json_encode($payload), CURLOPT_TIMEOUT => 20]);
         $r = curl_exec($ch); curl_close($ch);
         return json_decode($r ?: '{}', true) ?? [];
+    }
+
+    // -- Project access helper (same pattern as TestPlanController/TestCycleController) --
+    private static function projectClause(string $alias): array {
+        $ids = Auth::groupProjectIds();
+        if ($ids === null) return ['1=1', []];
+        if (empty($ids)) return ["$alias.project_id IS NULL", []];
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+        return ["($alias.project_id IS NULL OR $alias.project_id IN ($ph))", $ids];
     }
 }
