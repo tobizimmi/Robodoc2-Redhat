@@ -11,10 +11,10 @@ class TestPlanController {
         if ($projectId) { $where .= ' AND tp.project_id = ?'; $params[] = $projectId; }
 
         $plans = Database::fetchAll(
-            "SELECT tp.*, p.name project_name, COUNT(tpi.id) item_count
+            "SELECT tp.*, p.name project_name, COUNT(tpil.test_plan_item_id) item_count
              FROM test_plans tp
              LEFT JOIN projects p ON p.id = tp.project_id
-             LEFT JOIN test_plan_items tpi ON tpi.test_plan_id = tp.id
+             LEFT JOIN test_plan_item_links tpil ON tpil.test_plan_id = tp.id
              WHERE $where GROUP BY tp.id ORDER BY tp.created_at DESC",
             $params
         );
@@ -28,10 +28,13 @@ class TestPlanController {
         $plan = self::findOr404((int)$id);
         self::checkAccess($plan);
         $items = Database::fetchAll(
-            'SELECT tpi.*, tr.id req_id, tr.summary req_summary, tr.status req_status
+            'SELECT tpi.*, tr.id req_id, tr.summary req_summary, tr.status req_status,
+                    tpil.sort_order link_sort_order,
+                    (SELECT COUNT(*) FROM test_plan_item_links l2 WHERE l2.test_plan_item_id = tpi.id) link_count
              FROM test_plan_items tpi
+             JOIN test_plan_item_links tpil ON tpil.test_plan_item_id = tpi.id AND tpil.test_plan_id = ?
              LEFT JOIN test_requests tr ON tr.id = tpi.test_request_id
-             WHERE tpi.test_plan_id = ? ORDER BY tpi.sort_order, tpi.id',
+             ORDER BY tpil.sort_order, tpi.id',
             [(int)$id]
         );
         $cycles = Database::fetchAll(
@@ -106,8 +109,9 @@ class TestPlanController {
         $items = Database::fetchAll(
             'SELECT tpi.id, tpi.title, tpi.priority, tpi.category_id, tc.name category_name
              FROM test_plan_items tpi
+             JOIN test_plan_item_links tpil ON tpil.test_plan_item_id = tpi.id AND tpil.test_plan_id = ?
              LEFT JOIN test_categories tc ON tc.id = tpi.category_id
-             WHERE tpi.test_plan_id=? ORDER BY tpi.sort_order, tpi.id',
+             ORDER BY tpil.sort_order, tpi.id',
             [(int)$id]
         );
         echo json_encode($items);
@@ -155,6 +159,20 @@ class TestPlanController {
     public static function delete(string $id): void {
         Auth::requireAdmin();
         Auth::verifyCsrf();
+        // Items whose home is this plan but are also linked elsewhere must
+        // survive - reassign their home before the FK cascade below would
+        // otherwise take them down with the plan. Items with no other link
+        // are deleted along with the plan, same as before this feature.
+        $homeItems = Database::fetchAll('SELECT id FROM test_plan_items WHERE test_plan_id=?', [(int)$id]);
+        foreach ($homeItems as $hi) {
+            $otherLink = Database::fetchOne(
+                'SELECT test_plan_id FROM test_plan_item_links WHERE test_plan_item_id=? AND test_plan_id != ? LIMIT 1',
+                [$hi['id'], (int)$id]
+            );
+            if ($otherLink) {
+                Database::execute('UPDATE test_plan_items SET test_plan_id=? WHERE id=?', [(int)$otherLink['test_plan_id'], $hi['id']]);
+            }
+        }
         Database::execute('DELETE FROM test_plans WHERE id = ?', [(int)$id]);
         flash('success', 'Test plan deleted.');
         redirect('/test-plans');
@@ -166,12 +184,15 @@ class TestPlanController {
         $title  = trim($_POST['title'] ?? '');
         if (!$title) { flash('error', 'Title required.'); redirect('/test-plans/' . $id); }
         $categoryId = (int)($_POST['category_id'] ?? 0) ?: null;
+        $sortOrder = (int)(Database::fetchOne('SELECT COUNT(*) c FROM test_plan_item_links WHERE test_plan_id=?', [(int)$id])['c'] ?? 0);
         $itemId = Database::insert(
             'INSERT INTO test_plan_items (test_plan_id, title, description, expected_result, priority, status, sort_order, category_id) VALUES (?,?,?,?,?,?,?,?)',
             [(int)$id, $title, trim($_POST['description'] ?? ''), trim($_POST['expected_result'] ?? ''),
-             $_POST['priority'] ?? 'medium', 'pending',
-             (int)Database::fetchOne('SELECT COUNT(*) c FROM test_plan_items WHERE test_plan_id=?', [(int)$id])['c'],
-             $categoryId]
+             $_POST['priority'] ?? 'medium', 'pending', $sortOrder, $categoryId]
+        );
+        Database::insert(
+            'INSERT INTO test_plan_item_links (test_plan_id, test_plan_item_id, sort_order) VALUES (?,?,?)',
+            [(int)$id, $itemId, $sortOrder]
         );
         self::saveCustomFieldValues($itemId);
         flash('success', 'Item added.');
@@ -181,10 +202,11 @@ class TestPlanController {
     public static function updateItem(string $id, string $iid): void {
         Auth::requireEdit('testing');
         Auth::verifyCsrf();
+        self::checkItemLinked((int)$iid, (int)$id);
         Database::execute(
-            'UPDATE test_plan_items SET title=?, description=?, expected_result=?, priority=?, status=? WHERE id=? AND test_plan_id=?',
+            'UPDATE test_plan_items SET title=?, description=?, expected_result=?, priority=?, status=? WHERE id=?',
             [trim($_POST['title']), trim($_POST['description'] ?? ''), trim($_POST['expected_result'] ?? ''),
-             $_POST['priority'] ?? 'medium', $_POST['status'] ?? 'pending', (int)$iid, (int)$id]
+             $_POST['priority'] ?? 'medium', $_POST['status'] ?? 'pending', (int)$iid]
         );
         self::saveCustomFieldValues((int)$iid);
         flash('success', 'Item updated.');
@@ -194,10 +216,11 @@ class TestPlanController {
     public static function setTestRequest(string $id, string $iid): void {
         Auth::require();
         Auth::verifyCsrf();
+        self::checkItemLinked((int)$iid, (int)$id);
         $reqId = !empty($_POST['test_request_id']) ? (int)$_POST['test_request_id'] : null;
         Database::execute(
-            'UPDATE test_plan_items SET test_request_id=? WHERE id=? AND test_plan_id=?',
-            [$reqId, (int)$iid, (int)$id]
+            'UPDATE test_plan_items SET test_request_id=? WHERE id=?',
+            [$reqId, (int)$iid]
         );
         flash('success', $reqId ? 'Test Request linked.' : 'Test Request link removed.');
         redirect('/test-plans/' . $id);
@@ -242,13 +265,18 @@ class TestPlanController {
     public static function editItem(string $id, string $iid): void {
         Auth::requireEdit('testing');
         $plan = self::findOr404((int)$id);
-        $item = Database::fetchOne('SELECT * FROM test_plan_items WHERE id=? AND test_plan_id=?', [(int)$iid, (int)$id]);
+        $item = Database::fetchOne(
+            'SELECT tpi.* FROM test_plan_items tpi
+             JOIN test_plan_item_links tpil ON tpil.test_plan_item_id = tpi.id AND tpil.test_plan_id = ?
+             WHERE tpi.id = ?',
+            [(int)$id, (int)$iid]
+        );
         if (!$item) abort(404, 'Test Case not found');
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Auth::verifyCsrf();
             $categoryId = (int)($_POST['category_id'] ?? 0) ?: null;
-            Database::execute('UPDATE test_plan_items SET title=?, description=?, expected_result=?, priority=?, status=?, category_id=? WHERE id=? AND test_plan_id=?',
-                [trim($_POST['title']), trim($_POST['description']??''), trim($_POST['expected_result']??''), $_POST['priority']??'medium', $_POST['status']??'pending', $categoryId, (int)$iid, (int)$id]);
+            Database::execute('UPDATE test_plan_items SET title=?, description=?, expected_result=?, priority=?, status=?, category_id=? WHERE id=?',
+                [trim($_POST['title']), trim($_POST['description']??''), trim($_POST['expected_result']??''), $_POST['priority']??'medium', $_POST['status']??'pending', $categoryId, (int)$iid]);
             self::saveCustomFieldValues((int)$iid);
             flash('success', 'Test Case updated.');
             redirect('/test-plans/' . $id);
@@ -263,11 +291,88 @@ class TestPlanController {
         View::render('test-plans/edit-item', compact('plan', 'item', 'customFields', 'customValues', 'steps', 'categories') + ['title' => 'Edit Test Case']);
     }
 
+    // Removing a test case from a plan's list unlinks it from that plan; if
+    // this was its only remaining link anywhere, it has nothing left to be
+    // shared with and is deleted outright (steps/custom field values cascade
+    // via their own FKs). If its deleted link was the item's "home" plan but
+    // other links survive, reassign home to one of them so the item still
+    // resolves a project.
     public static function deleteItem(string $id, string $iid): void {
         Auth::requireEdit('testing');
         Auth::verifyCsrf();
-        Database::execute('DELETE FROM test_plan_items WHERE id=? AND test_plan_id=?', [(int)$iid, (int)$id]);
-        flash('success', 'Item deleted.');
+        self::checkItemLinked((int)$iid, (int)$id);
+        Database::execute('DELETE FROM test_plan_item_links WHERE test_plan_id=? AND test_plan_item_id=?', [(int)$id, (int)$iid]);
+        $remaining = Database::fetchAll('SELECT test_plan_id FROM test_plan_item_links WHERE test_plan_item_id=?', [(int)$iid]);
+        if (!$remaining) {
+            Database::execute('DELETE FROM test_plan_items WHERE id=?', [(int)$iid]);
+            flash('success', 'Item deleted.');
+        } else {
+            $item = Database::fetchOne('SELECT test_plan_id FROM test_plan_items WHERE id=?', [(int)$iid]);
+            if ($item && (int)$item['test_plan_id'] === (int)$id) {
+                Database::execute('UPDATE test_plan_items SET test_plan_id=? WHERE id=?', [(int)$remaining[0]['test_plan_id'], (int)$iid]);
+            }
+            flash('success', 'Item removed from this plan (still used by ' . count($remaining) . ' other plan(s)).');
+        }
+        redirect('/test-plans/' . $id);
+    }
+
+    // -- Link an existing test case from another plan in the same project --
+    public static function linkableItemsJson(string $id): void {
+        Auth::requireEdit('testing');
+        header('Content-Type: application/json');
+        $plan = self::findOr404((int)$id);
+        self::checkAccess($plan);
+        $q = trim($_GET['q'] ?? '');
+        $where = ['tp.project_id = ?', 'tpil2.test_plan_item_id IS NULL'];
+        $params = [(int)$plan['project_id']];
+        if ($q !== '') { $where[] = 'tpi.title LIKE ?'; $params[] = "%$q%"; }
+        $wStr = implode(' AND ', $where);
+        $items = Database::fetchAll(
+            "SELECT DISTINCT tpi.id, tpi.title, tpi.priority, tp.name plan_name
+             FROM test_plan_items tpi
+             JOIN test_plan_item_links tpil ON tpil.test_plan_item_id = tpi.id
+             JOIN test_plans tp ON tp.id = tpil.test_plan_id
+             LEFT JOIN test_plan_item_links tpil2 ON tpil2.test_plan_item_id = tpi.id AND tpil2.test_plan_id = ?
+             WHERE $wStr
+             ORDER BY tpi.title LIMIT 50",
+            array_merge([(int)$id], $params)
+        );
+        echo json_encode($items);
+        exit;
+    }
+
+    public static function linkItems(string $id): void {
+        Auth::requireEdit('testing');
+        Auth::verifyCsrf();
+        $plan = self::findOr404((int)$id);
+        self::checkAccess($plan);
+        $itemIds = array_filter(array_map('intval', (array)($_POST['item_ids'] ?? [])));
+        if (!$itemIds) { flash('error', 'No test cases selected.'); redirect('/test-plans/' . $id); }
+        // Only items whose home (or any existing link) is in this SAME
+        // project may be linked in - cross-project sharing is not allowed,
+        // it would reopen the project-isolation boundary.
+        $ph = implode(',', array_fill(0, count($itemIds), '?'));
+        $validItems = Database::fetchAll(
+            "SELECT DISTINCT tpi.id FROM test_plan_items tpi
+             JOIN test_plan_item_links tpil ON tpil.test_plan_item_id = tpi.id
+             JOIN test_plans tp ON tp.id = tpil.test_plan_id
+             WHERE tpi.id IN ($ph) AND tp.project_id = ?",
+            array_merge($itemIds, [(int)$plan['project_id']])
+        );
+        $nextOrder = (int)(Database::fetchOne('SELECT COUNT(*) c FROM test_plan_item_links WHERE test_plan_id=?', [(int)$id])['c'] ?? 0);
+        $linked = 0;
+        foreach ($validItems as $vi) {
+            try {
+                Database::insert(
+                    'INSERT INTO test_plan_item_links (test_plan_id, test_plan_item_id, sort_order) VALUES (?,?,?)',
+                    [(int)$id, $vi['id'], $nextOrder + $linked]
+                );
+                $linked++;
+            } catch (\Throwable) {
+                // already linked - ignore (UNIQUE key)
+            }
+        }
+        flash('success', $linked ? "$linked test case(s) linked." : 'Nothing to link (already linked or not in this project).');
         redirect('/test-plans/' . $id);
     }
 
@@ -279,16 +384,33 @@ class TestPlanController {
         $rows = array_map('str_getcsv', file($_FILES['csv']['tmp_name']));
         $header = array_shift($rows);
         $count = 0;
+        $nextOrder = (int)(Database::fetchOne('SELECT COUNT(*) c FROM test_plan_item_links WHERE test_plan_id=?', [(int)$id])['c'] ?? 0);
         foreach ($rows as $i => $row) {
             if (empty($row[0])) continue;
-            Database::insert(
+            $itemId = Database::insert(
                 'INSERT INTO test_plan_items (test_plan_id, title, description, expected_result, priority, status, sort_order) VALUES (?,?,?,?,?,?,?)',
-                [(int)$id, $row[0] ?? '', $row[1] ?? '', $row[2] ?? '', $row[3] ?? 'medium', 'pending', $i]
+                [(int)$id, $row[0] ?? '', $row[1] ?? '', $row[2] ?? '', $row[3] ?? 'medium', 'pending', $nextOrder + $count]
+            );
+            Database::insert(
+                'INSERT INTO test_plan_item_links (test_plan_id, test_plan_item_id, sort_order) VALUES (?,?,?)',
+                [(int)$id, $itemId, $nextOrder + $count]
             );
             $count++;
         }
         flash('success', "$count items imported.");
         redirect('/test-plans/' . $id);
+    }
+
+    // Validates that a test case is actually linked (home or otherwise) to
+    // the plan the request claims to operate under - replaces the old plain
+    // "id=? AND test_plan_id=?" ownership check, which would incorrectly
+    // reject a legitimately shared item accessed via a non-home plan.
+    private static function checkItemLinked(int $itemId, int $planId): void {
+        $linked = Database::fetchOne(
+            'SELECT 1 FROM test_plan_item_links WHERE test_plan_item_id=? AND test_plan_id=?',
+            [$itemId, $planId]
+        );
+        if (!$linked) abort(404, 'Test Case not found in this plan');
     }
 
     private static function findOr404(int $id): array {

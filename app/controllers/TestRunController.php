@@ -67,11 +67,12 @@ class TestRunController {
                 $testEntryAttachments[$attRow['entry_id']][] = $attRow;
             }
         }
-        // Plan items not yet in this run
+        // Plan items not yet in this run - includes test cases linked into
+        // this plan from elsewhere (the shared library), not just its own.
         $missingItems = Database::fetchAll(
             'SELECT tpi.* FROM test_plan_items tpi
-             WHERE tpi.test_plan_id = ?
-               AND tpi.id NOT IN (SELECT test_plan_item_id FROM test_run_results WHERE test_run_id = ?)',
+             JOIN test_plan_item_links tpil ON tpil.test_plan_item_id = tpi.id AND tpil.test_plan_id = ?
+             WHERE tpi.id NOT IN (SELECT test_plan_item_id FROM test_run_results WHERE test_run_id = ?)',
             [$run['test_plan_id'], (int)$id]
         );
 
@@ -139,11 +140,14 @@ class TestRunController {
                 'INSERT INTO test_runs (test_plan_id, test_cycle_id, name, description, environment, status, created_by) VALUES (?,?,?,?,?,?,?)',
                 [$planId, $cycleId, $name, trim($_POST['description'] ?? ''), trim($_POST['environment'] ?? ''), 'planned', Auth::id()]
             );
-            // Re-verify each selected id actually belongs to this plan before
+            // Re-verify each selected id actually belongs to this plan (its
+            // home, or linked in from elsewhere in the shared library) before
             // creating its result row (defense against a tampered submission).
             $ph = implode(',', array_fill(0, count($itemIds), '?'));
             $validItems = Database::fetchAll(
-                "SELECT id FROM test_plan_items WHERE test_plan_id = ? AND id IN ($ph)",
+                "SELECT tpi.id FROM test_plan_items tpi
+                 JOIN test_plan_item_links tpil ON tpil.test_plan_item_id = tpi.id AND tpil.test_plan_id = ?
+                 WHERE tpi.id IN ($ph)",
                 array_merge([$planId], $itemIds)
             );
             foreach ($validItems as $item) {
@@ -462,9 +466,9 @@ class TestRunController {
         $itemIds = array_filter(array_map('intval', (array)($_POST['item_ids'] ?? [])));
         $added = 0;
         foreach ($itemIds as $itemId) {
-            // Verify item belongs to the same plan
+            // Verify item is linked to this run's plan (home or shared in)
             $item = Database::fetchOne(
-                'SELECT id FROM test_plan_items WHERE id=? AND test_plan_id=?',
+                'SELECT id FROM test_plan_item_links WHERE test_plan_item_id=? AND test_plan_id=?',
                 [$itemId, $run['test_plan_id']]
             );
             if (!$item) continue;

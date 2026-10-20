@@ -44,7 +44,7 @@ class ProjectController {
             [(int)$id]
         );
         $testPlans = Database::fetchAll(
-            'SELECT tp.*, COUNT(tpi.id) item_count FROM test_plans tp LEFT JOIN test_plan_items tpi ON tpi.test_plan_id = tp.id WHERE tp.project_id = ? GROUP BY tp.id',
+            'SELECT tp.*, COUNT(tpil.test_plan_item_id) item_count FROM test_plans tp LEFT JOIN test_plan_item_links tpil ON tpil.test_plan_id = tp.id WHERE tp.project_id = ? GROUP BY tp.id',
             [(int)$id]
         );
         $statuses = json_decode(appSetting('project_statuses', '[]'), true) ?: [];

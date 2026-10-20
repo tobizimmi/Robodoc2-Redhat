@@ -1741,3 +1741,38 @@ function runMigrationsReport(): array {
     } catch (\Throwable $e) {
         error_log('test_runs.test_cycle_id FK migration failed: ' . $e->getMessage());
     }
+
+    // -- Migration: shared test-case library (many-to-many Test Plan <-> Test
+    // Case). A test case used to belong to exactly one plan (test_plan_items.
+    // test_plan_id, NOT NULL, ON DELETE CASCADE) - this adds a join table so
+    // the same test case can be linked into several plans within its project
+    // and edited/run from any of them. test_plan_items.test_plan_id is kept
+    // as the item's "home" plan (used for default project resolution and as
+    // the row to reassign away from when its home plan is deleted); every
+    // query that lists "this plan's test cases" now goes through the join
+    // table instead, which is seeded below with each item's existing home
+    // link so nothing changes for unlinked items.
+    try {
+        $linkTableExists = Database::fetchOne("SHOW TABLES LIKE 'test_plan_item_links'");
+        if (!$linkTableExists) {
+            Database::execute(
+                "CREATE TABLE test_plan_item_links (
+                    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    test_plan_id INT UNSIGNED NOT NULL,
+                    test_plan_item_id INT UNSIGNED NOT NULL,
+                    sort_order INT UNSIGNED NOT NULL DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_tpil_plan_item (test_plan_id, test_plan_item_id),
+                    KEY idx_tpil_item (test_plan_item_id),
+                    CONSTRAINT fk_tpil_plan FOREIGN KEY (test_plan_id) REFERENCES test_plans(id) ON DELETE CASCADE,
+                    CONSTRAINT fk_tpil_item FOREIGN KEY (test_plan_item_id) REFERENCES test_plan_items(id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+            );
+            Database::execute(
+                "INSERT INTO test_plan_item_links (test_plan_id, test_plan_item_id, sort_order)
+                 SELECT test_plan_id, id, sort_order FROM test_plan_items"
+            );
+        }
+    } catch (\Throwable $e) {
+        error_log('test_plan_item_links migration failed: ' . $e->getMessage());
+    }

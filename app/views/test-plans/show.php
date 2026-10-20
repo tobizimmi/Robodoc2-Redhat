@@ -78,11 +78,18 @@ $totPct = $totR > 0 ? round($totP/$totR*100) : 0;
 
 <!-- Test Cases -->
 <div class="card mb-4">
-  <div class="card-header border-secondary d-flex align-items-center justify-content-between">
+  <div class="card-header border-secondary d-flex align-items-center justify-content-between flex-wrap gap-2">
     <span class="fw-semibold small"><i class="bi bi-list-check me-1"></i>Test Cases <span class="badge bg-secondary ms-1"><?= count($items) ?></span></span>
-    <?php if (!empty($plan['xray_key'])): ?>
-    <span class="text-muted small"><?= count(array_filter($items, fn($i)=>!empty($i['synapse_key']))) ?>/<?= count($items) ?> in SynapseRT</span>
-    <?php endif; ?>
+    <div class="d-flex align-items-center gap-2">
+      <?php if (!empty($plan['xray_key'])): ?>
+      <span class="text-muted small"><?= count(array_filter($items, fn($i)=>!empty($i['synapse_key']))) ?>/<?= count($items) ?> in SynapseRT</span>
+      <?php endif; ?>
+      <?php if ($canEdit): ?>
+      <button class="btn btn-outline-info btn-sm py-0" style="font-size:.75rem" data-bs-toggle="modal" data-bs-target="#linkItemModal" onclick="loadLinkableItems()">
+        <i class="bi bi-link-45deg me-1"></i>Link existing
+      </button>
+      <?php endif; ?>
+    </div>
   </div>
   <?php if ($canEdit): ?>
   <div class="card-body border-bottom border-secondary pb-3">
@@ -125,6 +132,11 @@ $totPct = $totR > 0 ? round($totP/$totR*100) : 0;
             <span class="fw-semibold small"><?= e($item['title']) ?></span>
             <?php if (!empty($item['category_id']) && isset($categoriesById[$item['category_id']])): ?>
             <span class="badge bg-secondary" style="font-size:.6rem"><i class="bi bi-tag me-1"></i><?= e($categoriesById[$item['category_id']]['name']) ?></span>
+            <?php endif; ?>
+            <?php if ((int)($item['link_count'] ?? 1) > 1): ?>
+            <span class="badge bg-info text-dark" style="font-size:.6rem" title="Shared with <?= (int)$item['link_count'] - 1 ?> other plan(s)">
+              <i class="bi bi-diagram-3 me-1"></i>Shared &times;<?= (int)$item['link_count'] ?>
+            </span>
             <?php endif; ?>
             <?php if (!empty($item['synapse_key'])): ?>
             <span class="badge bg-dark border border-warning text-warning" style="font-size:.6rem" title="Status: <?= e($item['synapse_status'] ?? '') ?>">
@@ -193,7 +205,8 @@ $totPct = $totR > 0 ? round($totP/$totR*100) : 0;
         <div class="d-flex gap-1 flex-shrink-0">
           <a href="<?= url('test-plans/'.$plan['id'].'/items/'.$item['id'].'/edit') ?>" class="btn btn-outline-secondary btn-sm py-0 px-1"><i class="bi bi-pencil" style="font-size:.7rem"></i></a>
           <form method="POST" action="<?= url('test-plans/'.$plan['id'].'/items/'.$item['id'].'/delete') ?>" class="d-inline">
-            <?= csrfField() ?><button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="return confirm('Loeschen?')"><i class="bi bi-trash" style="font-size:.7rem"></i></button>
+            <?php $shareWarn = (int)($item['link_count'] ?? 1) > 1 ? ' Es wird nur aus diesem Plan entfernt, da er noch in anderen Plaenen verwendet wird.' : ' Er wird vollstaendig geloescht, da er nirgendwo sonst verwendet wird.'; ?>
+            <?= csrfField() ?><button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="return confirm('Test Case aus diesem Plan entfernen?<?= e($shareWarn) ?>')"><i class="bi bi-trash" style="font-size:.7rem"></i></button>
           </form>
         </div>
         <?php endif; ?>
@@ -363,6 +376,27 @@ $totPct = $totR > 0 ? round($totP/$totR*100) : 0;
     </form>
   </div></div>
 </div>
+<!-- Link Existing Test Case Modal -->
+<div class="modal fade" id="linkItemModal" tabindex="-1">
+  <div class="modal-dialog modal-lg"><div class="modal-content bg-dark border-secondary">
+    <div class="modal-header border-secondary"><h5 class="modal-title"><i class="bi bi-link-45deg me-2"></i>Vorhandenen Test Case verlinken</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+    <form method="POST" action="<?= url('test-plans/'.$plan['id'].'/link-items') ?>">
+      <?= csrfField() ?>
+      <div class="modal-body">
+        <div class="text-muted small mb-2">Nur Test Cases aus anderen Test Plaenen desselben Projekts (<?= e($plan['project_name']) ?>) koennen verlinkt werden.</div>
+        <input type="text" id="linkItemSearch" class="form-control form-control-sm mb-2" placeholder="Test Case suchen..." oninput="loadLinkableItems()">
+        <div id="linkItemList" class="border border-secondary rounded" style="max-height:320px;overflow-y:auto">
+          <div class="text-muted small p-3">Suche laeuft...</div>
+        </div>
+      </div>
+      <div class="modal-footer border-secondary">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Abbrechen</button>
+        <button type="submit" class="btn btn-info btn-sm"><i class="bi bi-link-45deg me-1"></i>Ausgewaehlte verlinken</button>
+      </div>
+    </form>
+  </div></div>
+</div>
 <!-- Edit Step Modal -->
 <div class="modal fade" id="editStepModal" tabindex="-1">
   <div class="modal-dialog"><div class="modal-content bg-dark border-secondary">
@@ -472,5 +506,28 @@ function delStep(stepId, itemId, planId, csrf) {
     method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'},
     body: new URLSearchParams({_csrf:csrf})
   }).then(r=>r.json()).then(d=>{ if (d.success) { document.getElementById('sr-'+stepId)?.remove(); } });
+}
+
+let _linkSearchTimer;
+function loadLinkableItems() {
+  clearTimeout(_linkSearchTimer);
+  _linkSearchTimer = setTimeout(() => {
+    const q = document.getElementById('linkItemSearch').value.trim();
+    fetch('<?= url('test-plans/'.$plan['id'].'/linkable-items-json') ?>?q=' + encodeURIComponent(q), {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+      .then(r => r.json())
+      .then(items => {
+        const list = document.getElementById('linkItemList');
+        if (!items.length) { list.innerHTML = '<div class="text-muted small p-3">Keine passenden Test Cases gefunden.</div>'; return; }
+        list.innerHTML = items.map(i =>
+          '<label class="list-group-item list-group-item-action bg-transparent border-secondary py-2 px-3 d-flex align-items-center gap-2" style="cursor:pointer">'
+          + '<input type="checkbox" class="form-check-input flex-shrink-0" name="item_ids[]" value="' + i.id + '">'
+          + '<span class="small flex-grow-1">' + (i.title || '').replace(/</g,'&lt;') + '</span>'
+          + '<span class="badge bg-secondary" style="font-size:.6rem">' + (i.plan_name || '').replace(/</g,'&lt;') + '</span>'
+          + (i.priority ? '<span class="badge bg-info text-dark" style="font-size:.6rem">' + i.priority + '</span>' : '')
+          + '</label>'
+        ).join('');
+      })
+      .catch(() => { document.getElementById('linkItemList').innerHTML = '<div class="text-danger small p-3">Netzwerkfehler.</div>'; });
+  }, 250);
 }
 </script>

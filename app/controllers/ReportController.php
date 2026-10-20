@@ -98,8 +98,8 @@ class ReportController
                          'pending'
                        ) AS status
                 FROM test_plan_items pi
-                WHERE pi.test_plan_id = ?
-                ORDER BY pi.sort_order, pi.id
+                JOIN test_plan_item_links pil ON pil.test_plan_item_id = pi.id AND pil.test_plan_id = ?
+                ORDER BY pil.sort_order, pi.id
             ", [$testPlanId]);
 
             $counts = [
