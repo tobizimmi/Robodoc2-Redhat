@@ -25,6 +25,7 @@ class TestAreaController
             "SELECT * FROM test_area_photos WHERE test_area_id = ? ORDER BY id",
             [(int)$id]
         );
+        [$accessClause, $accessParams] = Auth::entryAccessClause();
         $entries = Database::fetchAll("
             SELECT e.id, e.title, e.description, e.entry_date,
                    et.name type_name, et.color type_color,
@@ -32,9 +33,9 @@ class TestAreaController
             FROM entries e
             LEFT JOIN entry_types et ON et.id = e.entry_type_id
             LEFT JOIN projects p     ON p.id  = e.project_id
-            WHERE e.test_area_id = ?
+            WHERE e.test_area_id = ? AND $accessClause
             ORDER BY e.entry_date DESC LIMIT 50
-        ", [(int)$id]);
+        ", array_merge([(int)$id], $accessParams));
         View::render('test-areas/show', compact('area', 'photos', 'entries') + ['title' => $area['name']]);
     }
 

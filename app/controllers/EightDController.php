@@ -18,6 +18,9 @@ class EightDController
         $params  = [];
         if ($status)  { $where[] = 'r.status = ?'; $params[] = $status; }
         if ($search)  { $where[] = '(r.reference LIKE ? OR r.title LIKE ?)'; $params[] = "%$search%"; $params[] = "%$search%"; }
+        [$accessSql, $accessParams] = self::projectClause('r');
+        $where[] = $accessSql;
+        $params  = array_merge($params, $accessParams);
         $wStr = implode(' AND ', $where);
 
         $reports = Database::fetchAll(
@@ -30,7 +33,8 @@ class EightDController
              ORDER BY r.created_at DESC",
             $params
         );
-        $projects = Database::fetchAll("SELECT id, name FROM projects WHERE status='active' ORDER BY name");
+        [$pSql, $pParams] = Auth::projectAccessClause();
+        $projects = Database::fetchAll("SELECT id, name FROM projects WHERE status='active' AND $pSql ORDER BY name", $pParams);
         View::render('eight_d/index', compact('reports', 'projects', 'status', 'search') + ['title' => '8D-Berichte']);
     }
 
@@ -45,6 +49,10 @@ class EightDController
         $projectId = (int)($_POST['project_id'] ?? 0) ?: null;
         $entryId   = (int)($_POST['entry_id'] ?? 0) ?: null;
         if (!$title) { flash('error', 'Titel ist erforderlich.'); redirect('/8d'); }
+        if ($projectId && !Auth::isAdmin()) {
+            $ids = Auth::groupProjectIds();
+            if ($ids !== null && !in_array($projectId, $ids, true)) abort(403, 'No access to this project');
+        }
 
         $reference = self::nextReference();
         $id = Database::insert(
@@ -340,9 +348,19 @@ class EightDController
     public static function downloadAttachment(string $attId): void
     {
         Auth::require();
-        $att = Database::fetchOne('SELECT * FROM eight_d_attachments WHERE id=?', [(int)$attId]);
+        $att = Database::fetchOne(
+            'SELECT eda.*, r.project_id FROM eight_d_attachments eda
+             LEFT JOIN eight_d_reports r ON r.id = eda.report_id
+             WHERE eda.id=?',
+            [(int)$attId]
+        );
         if (!$att) abort(404);
         Auth::requireView('eight_d');
+        if (!Auth::isAdmin()) {
+            $ids = Auth::groupProjectIds();
+            $pid = $att['project_id'] ?? null;
+            if ($pid && $ids !== null && !in_array((int)$pid, $ids, true)) abort(403, 'No access to this project');
+        }
         if (!is_file($att['file_path'])) abort(404, 'Datei nicht gefunden.');
 
         $mime = $att['mime_type'] ?: 'application/octet-stream';
@@ -391,6 +409,15 @@ class EightDController
     {
         $report = Database::fetchOne('SELECT * FROM eight_d_reports WHERE id=?', [$id]);
         if (!$report) abort(404, '8D-Bericht nicht gefunden.');
+        // Shared by every public method below (show/update/close/reopen/
+        // delete/team/actions/attachments/export) - this used to have no
+        // project check at all, so any eight_d-view user could open/edit
+        // any report by id regardless of project membership.
+        if (!Auth::isAdmin()) {
+            $ids = Auth::groupProjectIds();
+            $pid = $report['project_id'] ?? null;
+            if ($pid && $ids !== null && !in_array((int)$pid, $ids, true)) abort(403, 'No access to this project');
+        }
         return $report;
     }
 
@@ -414,5 +441,13 @@ class EightDController
             $seq = (int)$m[1] + 1;
         }
         return sprintf('8D-%s-%04d', $year, $seq);
+    }
+
+    private static function projectClause(string $alias): array {
+        $ids = Auth::groupProjectIds();
+        if ($ids === null) return ['1=1', []];
+        if (empty($ids)) return ["$alias.project_id IS NULL", []];
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+        return ["($alias.project_id IS NULL OR $alias.project_id IN ($ph))", $ids];
     }
 }

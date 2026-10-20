@@ -42,6 +42,7 @@ class TagKanbanController
         $entriesByTag = [];
         if ($allTagIds) {
             $ph = implode(',', array_fill(0, count($allTagIds), '?'));
+            [$accessClause, $accessParams] = Auth::entryAccessClause();
             $entries = Database::fetchAll(
                 "SELECT e.id, e.title, e.status, e.priority, e.jira_issue_key, e.jira_issue_url,
                         e.zentao_bug_id, e.zentao_bug_url, e.jira_has_changes, e.zentao_has_changes,
@@ -53,9 +54,9 @@ class TagKanbanController
                  JOIN projects p ON p.id=e.project_id
                  LEFT JOIN entry_types et2 ON et2.id=e.entry_type_id
                  LEFT JOIN error_categories ec ON ec.id=e.error_category_id
-                 WHERE et.tag_id IN ($ph)
+                 WHERE et.tag_id IN ($ph) AND $accessClause
                  ORDER BY e.created_at DESC",
-                $allTagIds
+                array_merge($allTagIds, $accessParams)
             );
             // Build childrenMap: parent_id -> [child entries]
             $allEntries = $entries;
@@ -78,7 +79,7 @@ class TagKanbanController
                      LEFT JOIN entry_types et ON et.id=e.entry_type_id
                      LEFT JOIN error_categories ec ON ec.id=e.error_category_id
                      LEFT JOIN projects p ON p.id=e.project_id
-                     WHERE e.id IN ($phP)", $parentIdsNeeded
+                     WHERE e.id IN ($phP) AND $accessClause", array_merge($parentIdsNeeded, $accessParams)
                 );
                 foreach ($parentEntries as $pe) {
                     $pe['_is_parent_of_tagged_sub'] = true;

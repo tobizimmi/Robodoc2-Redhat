@@ -168,9 +168,13 @@ class EntryExportController
             [$id]
         );
         if (!$entry) return null;
-        // Check access
-        $access = Auth::groupAccess();
-        if ($access !== null && !in_array($entry['project_id'], $access)) return null;
+        // Check access - groupAccess() returns a nested ['all'=>[...],'own'=>[...]]
+        // shape, so checking a scalar project_id against it directly never
+        // matches; groupProjectIds() is the flat id list this needs.
+        if (!Auth::isAdmin()) {
+            $ids = Auth::groupProjectIds();
+            if ($ids !== null && $entry['project_id'] && !in_array((int)$entry['project_id'], $ids, true)) return null;
+        }
         // Detect test entry
         $testTypeIds = array_filter(array_map('trim', explode(',', appSetting('test_result_entry_type_ids',''))));
         $entry['is_test_entry'] = in_array($entry['entry_type_id'], $testTypeIds);

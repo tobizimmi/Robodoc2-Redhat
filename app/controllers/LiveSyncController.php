@@ -734,6 +734,15 @@ class LiveSyncController
         Auth::require();
         Auth::verifyCsrf();
         header('Content-Type: application/json');
+        $entry = Database::fetchOne('SELECT project_id FROM entries WHERE id=?', [(int)$id]);
+        if (!$entry) { http_response_code(404); echo json_encode(['ok' => false, 'error' => 'Entry not found']); exit; }
+        if (!Auth::isAdmin()) {
+            $ids = Auth::groupProjectIds();
+            $pid = $entry['project_id'] ?? null;
+            if ($pid && $ids !== null && !in_array((int)$pid, $ids, true)) {
+                http_response_code(403); echo json_encode(['ok' => false, 'error' => 'No access to this project']); exit;
+            }
+        }
         echo json_encode(self::checkForChanges((int)$id));
         exit;
     }

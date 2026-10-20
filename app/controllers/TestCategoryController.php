@@ -18,6 +18,12 @@ class TestCategoryController
             echo json_encode(['error' => 'Projekt und Name sind erforderlich.']);
             exit;
         }
+        if (!Auth::isAdmin()) {
+            $ids = Auth::groupProjectIds();
+            if ($ids !== null && !in_array($projectId, $ids, true)) {
+                http_response_code(403); echo json_encode(['error' => 'No access to this project']); exit;
+            }
+        }
 
         $existing = Database::fetchOne(
             'SELECT id, name FROM test_categories WHERE project_id=? AND name=?',
@@ -42,6 +48,15 @@ class TestCategoryController
         Auth::requireEdit('testing');
         header('Content-Type: application/json');
         Auth::verifyCsrf();
+        $cat = Database::fetchOne('SELECT project_id FROM test_categories WHERE id=?', [(int)$id]);
+        if (!$cat) { http_response_code(404); echo json_encode(['error' => 'Not found']); exit; }
+        if (!Auth::isAdmin()) {
+            $ids = Auth::groupProjectIds();
+            $pid = $cat['project_id'] ?? null;
+            if ($pid && $ids !== null && !in_array((int)$pid, $ids, true)) {
+                http_response_code(403); echo json_encode(['error' => 'No access to this project']); exit;
+            }
+        }
         Database::execute('UPDATE test_plan_items SET category_id=NULL WHERE category_id=?', [(int)$id]);
         Database::execute('DELETE FROM test_categories WHERE id=?', [(int)$id]);
         echo json_encode(['success' => true]);

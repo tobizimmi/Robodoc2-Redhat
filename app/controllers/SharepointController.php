@@ -78,6 +78,13 @@ class SharepointController {
             [(int)$id]
         );
         if (!$entry) { echo json_encode(['error' => 'Entry not found']); exit; }
+        if (!Auth::isAdmin()) {
+            $ids = Auth::groupProjectIds();
+            $pid = $entry['project_id'] ?? null;
+            if ($pid && $ids !== null && !in_array((int)$pid, $ids, true)) {
+                http_response_code(403); echo json_encode(['error' => 'No access to this project']); exit;
+            }
+        }
         $folder = trim($_POST['folder'] ?? $entry['project_sp_folder'] ?? '');
         $attIds = array_filter(array_map('intval', (array)($_POST['att_ids'] ?? [])));
         if ($folder === '') { echo json_encode(['error' => 'No target folder specified.']); exit; }
