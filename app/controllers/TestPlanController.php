@@ -173,6 +173,15 @@ class TestPlanController {
                 Database::execute('UPDATE test_plan_items SET test_plan_id=? WHERE id=?', [(int)$otherLink['test_plan_id'], $hi['id']]);
             }
         }
+        // test_runs.test_cycle_id is ON DELETE RESTRICT, so the test_plans
+        // delete below (which cascades onto test_cycles via fk_tc_plan) would
+        // fail while a run still points at one of this plan's cycles - clear
+        // that reference first; the runs themselves still cascade away via
+        // their own test_plan_id FK (fk_tr_plan) when the plan row is deleted.
+        Database::execute(
+            'UPDATE test_runs SET test_cycle_id=NULL WHERE test_plan_id=?',
+            [(int)$id]
+        );
         Database::execute('DELETE FROM test_plans WHERE id = ?', [(int)$id]);
         flash('success', 'Test plan deleted.');
         redirect('/test-plans');

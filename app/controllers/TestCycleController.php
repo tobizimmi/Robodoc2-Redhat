@@ -34,6 +34,10 @@ class TestCycleController
         );
         if (!$cycle) abort(404);
         self::checkAccess($cycle);
+        // test_runs.test_cycle_id is ON DELETE RESTRICT (direct cycle deletion
+        // must not silently take runs with it) - unassign the runs first so
+        // they survive as legacy runs under the plan, then delete the cycle.
+        Database::execute('UPDATE test_runs SET test_cycle_id=NULL WHERE test_cycle_id=?', [(int)$id]);
         Database::execute('DELETE FROM test_cycles WHERE id=?', [(int)$id]);
         flash('success', 'Test Cycle deleted.');
         redirect('/test-plans/' . $cycle['test_plan_id']);
