@@ -49,7 +49,7 @@ if ($action === 'dump') {
                 echo "INSERT INTO `$table` ($cols) VALUES\n";
                 $vals = [];
                 foreach ($chunk as $row) {
-                    $escaped = array_map(fn($v) => $v === null ? 'NULL' : $pdo->quote($v), array_values($row));
+                    $escaped = array_map(function($v) use ($pdo) { return $v === null ? 'NULL' : $pdo->quote($v); }, array_values($row));
                     $vals[] = '(' . implode(', ', $escaped) . ')';
                 }
                 echo implode(",\n", $vals) . ";\n";
