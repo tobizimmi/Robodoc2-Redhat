@@ -1,11 +1,7 @@
 #!/bin/bash
-# Azure App Service startup script
-
-# Set nginx document root to public/
 cat > /etc/nginx/conf.d/default.conf << 'NGINX'
 server {
     listen 8080;
-    listen [::]:8080;
     root /home/site/wwwroot/public;
     index index.php index.html;
 
@@ -25,8 +21,4 @@ server {
     }
 }
 NGINX
-
-mkdir -p /home/site/wwwroot/uploads
-chmod 777 /home/site/wwwroot/uploads
-
 service nginx reload 2>/dev/null || nginx -s reload 2>/dev/null || true
