@@ -1,13 +1,25 @@
 #!/bin/bash
-# Azure App Service startup script for PHP on Linux (nginx)
+# Azure App Service startup script
 
-# Install MySQL PHP extension if missing
+# Install pdo_mysql extension
+echo "Installing pdo_mysql..."
+apt-get update -qq 2>/dev/null
+apt-get install -y php8.2-mysql 2>/dev/null
+docker-php-ext-install pdo_mysql 2>/dev/null || true
+
+# Try pecl if apt fails
 if ! php -m | grep -q pdo_mysql; then
-    apt-get update -qq
-    apt-get install -y -qq php-mysql php8.2-mysql 2>/dev/null || true
+    pecl install pdo_mysql 2>/dev/null || true
+    echo "extension=pdo_mysql.so" >> /usr/local/etc/php/conf.d/pdo_mysql.ini
 fi
 
-# Set document root to public/
+# Try direct enable
+phpenmod mysql 2>/dev/null || true
+phpenmod pdo_mysql 2>/dev/null || true
+
+echo "PDO drivers: $(php -r 'print_r(PDO::getAvailableDrivers());')"
+
+# Set nginx document root to public/
 cat > /etc/nginx/conf.d/default.conf << 'NGINX'
 server {
     listen 8080;
@@ -32,9 +44,9 @@ server {
 }
 NGINX
 
-# Create uploads directory
 mkdir -p /home/site/wwwroot/uploads
 chmod 777 /home/site/wwwroot/uploads
 
-# Reload nginx
 service nginx reload 2>/dev/null || nginx -s reload 2>/dev/null || true
+
+echo "Startup complete"
