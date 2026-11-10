@@ -10,19 +10,25 @@ class Database {
             $port = defined('DB_PORT') ? DB_PORT : '3306';
             $name = DB_NAME;
 
-            // Auto-enable SSL for Azure MySQL via DSN parameter
-            $ssl = '';
-            if (str_contains($host, 'azure.com') || str_contains($host, 'mysql.database') || (defined('DB_SSL') && DB_SSL)) {
-                $ssl = ';sslmode=required';
-            }
+            $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
 
-            $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4{$ssl}";
-
-            self::$instance = new PDO($dsn, DB_USER, DB_PASS, [
+            $options = [
                 PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_EMULATE_PREPARES   => false,
-            ]);
+            ];
+
+            // Azure MySQL requires SSL — use MYSQLI_CLIENT_SSL via PDO driver options
+            $isAzure = str_contains($host, 'azure.com') || str_contains($host, 'mysql.database');
+            $forceSsl = defined('DB_SSL') && DB_SSL;
+            if ($isAzure || $forceSsl) {
+                // Use PDO MySQL driver-level SSL options (compatible with PHP 8.x)
+                $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
+                // Empty string means use system CA store (works on Azure App Service)
+                $options[PDO::MYSQL_ATTR_SSL_CA] = '';
+            }
+
+            self::$instance = new PDO($dsn, DB_USER, DB_PASS, $options);
         }
         return self::$instance;
     }
