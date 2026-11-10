@@ -18,14 +18,19 @@ class Database {
                 PDO::ATTR_EMULATE_PREPARES   => false,
             ];
 
-            // Azure MySQL requires SSL — use MYSQLI_CLIENT_SSL via PDO driver options
+            // Azure MySQL requires SSL — use new PHP 8.5 compatible constants
             $isAzure = str_contains($host, 'azure.com') || str_contains($host, 'mysql.database');
             $forceSsl = defined('DB_SSL') && DB_SSL;
             if ($isAzure || $forceSsl) {
-                // Use PDO MySQL driver-level SSL options (compatible with PHP 8.x)
-                $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
-                // Empty string means use system CA store (works on Azure App Service)
-                $options[PDO::MYSQL_ATTR_SSL_CA] = '';
+                // PHP 8.5+ uses Pdo\Mysql constants, older uses PDO::MYSQL_ATTR_*
+                if (PHP_VERSION_ID >= 80500) {
+                    $options[Pdo\Mysql::ATTR_SSL_VERIFY_SERVER_CERT] = false;
+                    $options[Pdo\Mysql::ATTR_SSL_CA]                 = '';
+                } else {
+                    // Suppress deprecation warnings on older versions
+                    $options[@PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
+                    $options[@PDO::MYSQL_ATTR_SSL_CA]                 = '';
+                }
             }
 
             self::$instance = new PDO($dsn, DB_USER, DB_PASS, $options);
