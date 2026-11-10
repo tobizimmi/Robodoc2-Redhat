@@ -15,6 +15,18 @@ if [ -f /usr/local/etc/php/php.ini-production ]; then
 fi
 echo "extension=$PDO_MYSQL_SO" >> /usr/local/etc/php/php.ini
 
+# PHP upload limits (php.ini-production defaults to 2M/8M; app allows up to 500 MB)
+cat >> /usr/local/etc/php/php.ini << 'INI'
+upload_max_filesize = 512M
+post_max_size = 520M
+max_execution_time = 300
+max_input_time = 300
+memory_limit = 512M
+INI
+
+# nginx request body limit (default is 1 MB; conf.d is included in the http block)
+echo "client_max_body_size 520M;" > /etc/nginx/conf.d/upload-limit.conf
+
 # Restart PHP-FPM to pick up new extension
 pkill -USR2 php-fpm 2>/dev/null || true
 sleep 1
