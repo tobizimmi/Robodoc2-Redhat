@@ -63,7 +63,22 @@ if ($action === 'dump') {
 
 // ── Uploads ZIP ───────────────────────────────────────────────────────────────
 if ($action === 'uploads') {
-    $uploadDir = __DIR__ . '/uploads';
+    // Try multiple possible upload paths
+    $possibleDirs = [
+        defined('UPLOAD_DIR') ? rtrim(UPLOAD_DIR, '/') : null,
+        dirname(__DIR__) . '/uploads',
+        __DIR__ . '/uploads',
+        '/var/www/html/uploads',
+        '/var/www/uploads',
+    ];
+    $uploadDir = null;
+    foreach ($possibleDirs as $d) {
+        if ($d && is_dir($d)) { $uploadDir = $d; break; }
+    }
+    if (!$uploadDir) {
+        $checked = implode('<br>', array_filter($possibleDirs));
+        die('Upload directory not found. Checked:<br>' . $checked);
+    }
     if (!is_dir($uploadDir)) {
         die('Upload directory not found: ' . $uploadDir);
     }
@@ -96,7 +111,15 @@ if ($action === 'uploads') {
 // ── Info ──────────────────────────────────────────────────────────────────────
 if ($action === 'info') {
     header('Content-Type: application/json');
-    $uploadDir  = __DIR__ . '/uploads';
+    $possibleDirs2 = [
+        defined('UPLOAD_DIR') ? rtrim(UPLOAD_DIR, '/') : null,
+        dirname(__DIR__) . '/uploads',
+        __DIR__ . '/uploads',
+    ];
+    $uploadDir = null;
+    foreach ($possibleDirs2 as $d) {
+        if ($d && is_dir($d)) { $uploadDir = $d; break; }
+    }
     $uploadSize = 0;
     $uploadCount = 0;
     if (is_dir($uploadDir)) {
@@ -117,6 +140,7 @@ if ($action === 'info') {
         $rows[$t] = (int)$pdo->query("SELECT COUNT(*) FROM `$t`")->fetchColumn();
     }
     echo json_encode([
+        'upload_dir_detected' => $uploadDir,
         'db_host'      => $cfg['host'],
         'db_name'      => $cfg['name'],
         'tables'       => count($tables),
