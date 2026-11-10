@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -18,13 +18,7 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Install Composer dependencies
-        run: |
-          if [ -f composer.json ]; then
-            composer install --no-dev --optimize-autoloader --ignore-platform-reqs
-          fi
-
-      - name: Deploy to Azure Web App
+      - name: Build and deploy to Azure Web App (Docker)
         uses: azure/webapps-deploy@v3
         with:
           app-name: RoboDoc2

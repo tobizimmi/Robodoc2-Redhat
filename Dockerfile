@@ -1,64 +1,41 @@
-FROM php:8.3-apache
+FROM php:8.2-fpm
 
-# ── System packages & PHP extensions ────────────────────────────────────────
-# libzip/png/jpeg/webp/freetype: needed to build the gd extension (thumbnails).
-# default-mysql-client: lets you `oc rsh` into the pod and run mysql/mysqldump.
-# ffmpeg: RoboDoc2 shells out to /usr/bin/ffmpeg for background video compression
-#         on upload (see app/controllers/EntryController.php) — required, not optional.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        libzip-dev libpng-dev libjpeg62-turbo-dev libwebp-dev libfreetype6-dev libonig-dev \
-        default-mysql-client ffmpeg unzip \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
-    && docker-php-ext-install -j"$(nproc)" pdo_mysql mysqli gd exif zip mbstring \
-    && a2enmod rewrite headers \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-# NOTE: intentionally NOT purging the -dev packages afterwards — apt's
-# --auto-remove pulls the matching runtime shared libraries (libzip5,
-# libpng16, libjpeg62-turbo, libwebp7, libfreetype6, libonig5) out with them
-# since nothing "apt-visible" depends on them (the PHP extensions that link
-# against them were built by docker-php-ext-install, not apt), which breaks
-# those extensions at runtime with "cannot open shared object file" errors.
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    nginx \
+    libpng-dev \
+    libjpeg-dev \
+    libzip-dev \
+    zip \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
 
-# ── PHP upload limits ─────────────────────────────────────────────────────────
-# public/.user.ini exists for PHP-FPM/CGI deployments (Live/Staging), but this
-# image runs mod_php under Apache - .user.ini is NOT read by the apache2handler
-# SAPI, so without this override every upload silently falls back to PHP's
-# stock 8M post_max_size ("POST Content-Length ... exceeds the limit of
-# 8388608 bytes"), which then cascades into "headers already sent" everywhere
-# else in the request since that warning is emitted before any app code runs.
-RUN printf 'upload_max_filesize = 500M\npost_max_size = 512M\nmax_file_uploads = 50\nmemory_limit = 512M\nmax_execution_time = 300\nmax_input_time = 300\n' \
-    > /usr/local/etc/php/conf.d/zz-robodoc-uploads.ini
+# Install PHP extensions including pdo_mysql
+RUN docker-php-ext-install \
+    pdo \
+    pdo_mysql \
+    mysqli \
+    mbstring \
+    zip \
+    gd
 
-# ── Apache: listen on 8080, serve from public/ ──────────────────────────────
-# OpenShift's default "restricted" SCC runs containers as an arbitrary,
-# non-root UID (with group 0) and never grants CAP_NET_BIND_SERVICE, so we
-# can't bind port 80 — 8080 is the conventional unprivileged substitute.
-RUN sed -i 's/Listen 80/Listen 8080/' /etc/apache2/ports.conf \
-    && sed -i 's/<VirtualHost \*:80>/<VirtualHost *:8080>/' /etc/apache2/sites-available/000-default.conf \
-    && sed -i 's#DocumentRoot /var/www/html#DocumentRoot /var/www/html/public#' /etc/apache2/sites-available/000-default.conf \
-    && printf '<Directory /var/www/html/public>\n    AllowOverride All\n    Require all granted\n</Directory>\n' \
-       >> /etc/apache2/sites-available/000-default.conf
+# Configure nginx
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 
+# Copy app files
+COPY . /var/www/html/
 WORKDIR /var/www/html
-COPY app/ /var/www/html/app/
-COPY public/ /var/www/html/public/
 
-# uploads/ is a mount point for a PersistentVolumeClaim in OpenShift — created
-# here so the image is also directly runnable (e.g. plain `docker run`) without one.
-RUN mkdir -p /var/www/html/uploads/thumbs \
-    && printf 'RewriteEngine On\nRewriteCond %%{REQUEST_FILENAME} !-f\nRewriteCond %%{REQUEST_FILENAME} !-d\nRewriteRule ^ index.php [QSA,L]\n' \
-       > /var/www/html/public/.htaccess
+# Set permissions
+RUN mkdir -p /var/www/html/uploads \
+    && chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html \
+    && chmod -R 777 /var/www/html/uploads
 
-# ── Arbitrary-UID compatibility ─────────────────────────────────────────────
-# The UID OpenShift assigns at runtime is unpredictable, but it is always a
-# member of group 0. Make every path the app or Apache itself needs to write
-# to group-owned by 0 with group rwX, so it works no matter which UID lands.
-RUN mkdir -p /var/run/apache2 /var/lock/apache2 \
-    && chgrp -R 0 /var/www/html /var/log/apache2 /var/run/apache2 /var/lock/apache2 \
-    && chmod -R g=u /var/www/html /var/log/apache2 /var/run/apache2 /var/lock/apache2 \
-    && chmod -R g+rwX /var/www/html/uploads
+# Copy startup script
+COPY docker/start.sh /start.sh
+RUN chmod +x /start.sh
 
-ENV HOME=/var/www/html
 EXPOSE 8080
-USER 1001
-CMD ["apache2-foreground"]
+
+CMD ["/start.sh"]
