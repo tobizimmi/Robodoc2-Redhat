@@ -28,6 +28,10 @@ class Auth {
 
             // Use a private session directory so the system GC cannot interfere.
             $sessionDir = sys_get_temp_dir() . '/robodoc2_sessions';
+            // Azure App Service: use /home for persistent storage
+            if (str_contains(PHP_OS, 'Linux') && is_dir('/home')) {
+                $sessionDir = '/home/robodoc2_sessions';
+            }
             if (!is_dir($sessionDir)) {
                 @mkdir($sessionDir, 0700, true);
             }
