@@ -28,16 +28,14 @@ class Auth {
 
             // Use a private session directory so the system GC cannot interfere.
             $sessionDir = sys_get_temp_dir() . '/robodoc2_sessions';
-            // Azure App Service: use /home for persistent storage
-            if (str_contains(PHP_OS, 'Linux') && is_dir('/home')) {
-                $sessionDir = '/home/robodoc2_sessions';
-            }
+            // Use custom session dir only if writable, otherwise use PHP default
             if (!is_dir($sessionDir)) {
                 @mkdir($sessionDir, 0700, true);
             }
-            if (is_dir($sessionDir) && is_writable($sessionDir)) {
+            if (is_dir($sessionDir) && is_writable($sessionDir) && is_writable(dirname($sessionDir))) {
                 session_save_path($sessionDir);
             }
+            // If custom dir not usable, PHP uses its default session path
 
             session_name('robodoc2_session');
             session_set_cookie_params([
