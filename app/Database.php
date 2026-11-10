@@ -6,20 +6,21 @@ class Database {
 
     public static function get(): PDO {
         if (self::$instance === null) {
-            $dsn = sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4', DB_HOST, DB_PORT, DB_NAME);
-            $options = [
+            $host = DB_HOST;
+            $port = defined('DB_PORT') ? DB_PORT : '3306';
+            $name = DB_NAME;
+
+            // Auto-enable SSL for Azure MySQL via DSN parameter
+            $ssl = '';
+            if (str_contains($host, 'azure.com') || str_contains($host, 'mysql.database') || (defined('DB_SSL') && DB_SSL)) {
+                $ssl = ';sslmode=required';
+            }
+
+            $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4{$ssl}";
+
+            self::$instance = new PDO($dsn, DB_USER, DB_PASS, [
                 PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            ];
-            // Enable SSL for Azure MySQL
-            if (defined('DB_SSL') && DB_SSL) {
-                $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
-                $options[PDO::MYSQL_ATTR_SSL_CA] = defined('DB_SSL_CA') ? DB_SSL_CA : true;
-            } elseif (str_contains(DB_HOST, 'azure.com') || str_contains(DB_HOST, 'mysql.database')) {
-                // Auto-detect Azure MySQL and enable SSL
-                $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
-            }
-            self::$instance = new PDO($dsn, DB_USER, DB_PASS, [
                 PDO::ATTR_EMULATE_PREPARES   => false,
             ]);
         }
@@ -32,21 +33,20 @@ class Database {
         return $stmt;
     }
 
-    public static function fetchOne(string $sql, array $params = []): ?array {
-        $row = self::query($sql, $params)->fetch();
-        return $row ?: null;
-    }
-
     public static function fetchAll(string $sql, array $params = []): array {
         return self::query($sql, $params)->fetchAll();
     }
 
-    public static function insert(string $sql, array $params = []): int {
-        self::query($sql, $params);
-        return (int)self::get()->lastInsertId();
+    public static function fetchOne(string $sql, array $params = []): array|false {
+        return self::query($sql, $params)->fetch();
     }
 
     public static function execute(string $sql, array $params = []): int {
         return self::query($sql, $params)->rowCount();
+    }
+
+    public static function insert(string $sql, array $params = []): int|string {
+        self::query($sql, $params);
+        return self::get()->lastInsertId();
     }
 }
