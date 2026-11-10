@@ -92,10 +92,8 @@ if ($action === 'wget_script') {
         $rel = str_replace('\', '/', substr($file->getRealPath(), strlen($uploadDir)+1));
         $dir = dirname($rel);
         $url = $baseUrl . '/migrate.php?action=download_file&file=' . rawurlencode($rel);
-        echo "mkdir -p " . escapeshellarg($dir) . "
-";
-        echo "curl -o " . escapeshellarg($rel) . " -L " . escapeshellarg($url) . "
-";
+        echo "mkdir -p " . escapeshellarg($dir) . PHP_EOL;
+        echo "curl -o " . escapeshellarg($rel) . " -L " . escapeshellarg($url) . PHP_EOL;
     }
     exit;
 }
