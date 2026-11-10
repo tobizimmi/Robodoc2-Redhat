@@ -1,6 +1,12 @@
 #!/bin/bash
 # Azure App Service startup script for PHP on Linux (nginx)
 
+# Install MySQL PHP extension if missing
+if ! php -m | grep -q pdo_mysql; then
+    apt-get update -qq
+    apt-get install -y -qq php-mysql php8.2-mysql 2>/dev/null || true
+fi
+
 # Set document root to public/
 cat > /etc/nginx/conf.d/default.conf << 'NGINX'
 server {
@@ -30,5 +36,5 @@ NGINX
 mkdir -p /home/site/wwwroot/uploads
 chmod 777 /home/site/wwwroot/uploads
 
-# Restart nginx
-service nginx reload || nginx -s reload
+# Reload nginx
+service nginx reload 2>/dev/null || nginx -s reload 2>/dev/null || true
