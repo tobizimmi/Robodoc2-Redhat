@@ -1,14 +1,34 @@
 #!/bin/bash
-# Azure App Service startup script
+# Azure App Service startup script for PHP on Linux (nginx)
+
 # Set document root to public/
+cat > /etc/nginx/conf.d/default.conf << 'NGINX'
+server {
+    listen 8080;
+    listen [::]:8080;
+    root /home/site/wwwroot/public;
+    index index.php index.html;
 
-# Update Apache config to use public/ as document root
-if [ -f /etc/apache2/sites-available/000-default.conf ]; then
-    sed -i 's|DocumentRoot /home/site/wwwroot|DocumentRoot /home/site/wwwroot/public|g' /etc/apache2/sites-available/000-default.conf
-    sed -i 's|<Directory /home/site/wwwroot>|<Directory /home/site/wwwroot/public>|g' /etc/apache2/sites-available/000-default.conf
-    service apache2 restart
-fi
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
 
-# Create uploads directory if it doesn't exist
+    location ~ \.php$ {
+        fastcgi_pass 127.0.0.1:9000;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+}
+NGINX
+
+# Create uploads directory
 mkdir -p /home/site/wwwroot/uploads
 chmod 777 /home/site/wwwroot/uploads
+
+# Restart nginx
+service nginx reload || nginx -s reload
