@@ -61,6 +61,45 @@ if ($action === 'dump') {
     exit;
 }
 
+// ── Generate wget script ─────────────────────────────────────────────────────
+if ($action === 'wget_script') {
+    $uploadDir = detectUploadDir();
+    if (!$uploadDir) die('Upload dir not found');
+    
+    $baseUrl = (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] 
+               . dirname($_SERVER['REQUEST_URI']);
+    
+    header('Content-Type: text/plain');
+    header('Content-Disposition: attachment; filename="download_uploads.sh"');
+    
+    echo "#!/bin/bash
+";
+    echo "# RoboDoc Upload Downloader
+";
+    echo "# Run this on your local machine to download all uploads
+
+";
+    echo "mkdir -p uploads
+";
+    echo "cd uploads
+
+";
+    
+    $files = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($uploadDir, RecursiveDirectoryIterator::SKIP_DOTS));
+    foreach ($files as $file) {
+        if (!$file->isFile()) continue;
+        $rel = str_replace('\', '/', substr($file->getRealPath(), strlen($uploadDir)+1));
+        $dir = dirname($rel);
+        $url = $baseUrl . '/migrate.php?action=download_file&file=' . rawurlencode($rel);
+        echo "mkdir -p " . escapeshellarg($dir) . "
+";
+        echo "curl -o " . escapeshellarg($rel) . " -L " . escapeshellarg($url) . "
+";
+    }
+    exit;
+}
+
 // ── Upload list (shows folders to download individually) ──────────────────────
 if ($action === 'list_uploads') {
     header('Content-Type: application/json');
@@ -90,6 +129,23 @@ if ($action === 'list_uploads') {
     exit;
 }
 
+// ── Download single file ─────────────────────────────────────────────────────
+if ($action === 'download_file') {
+    $uploadDir = detectUploadDir();
+    $rel = ltrim($_GET['file'] ?? '', '/');
+    // Security: no path traversal
+    if (strpos($rel, '..') !== false || !$rel) die('Invalid path');
+    $fullPath = $uploadDir . '/' . $rel;
+    if (!$uploadDir || !is_file($fullPath)) die('File not found: ' . $fullPath);
+    $mime = mime_content_type($fullPath) ?: 'application/octet-stream';
+    header('Content-Type: ' . $mime);
+    header('Content-Disposition: attachment; filename="' . basename($fullPath) . '"');
+    header('Content-Length: ' . filesize($fullPath));
+    readfile($fullPath);
+    exit;
+}
+
+// ── Download subfolder as chunked ZIPs (max 50MB each) ───────────────────────
 // ── Download single subfolder as ZIP ─────────────────────────────────────────
 if ($action === 'download_folder') {
     $folder = basename($_GET['folder'] ?? '');
@@ -194,7 +250,16 @@ pre{background:#0f172a;padding:1rem;border-radius:6px;font-size:12px}
     <div class="card-header fw-semibold"><i class="bi bi-folder me-2 text-success"></i>Schritt 2 — Uploads exportieren (Ordner für Ordner)</div>
     <div class="card-body">
       <p class="small text-muted">Jeder Ordner wird einzeln als ZIP heruntergeladen um Timeouts zu vermeiden.</p>
-      <button class="btn btn-success btn-sm mb-3" onclick="listUploads()">
+      <div class="d-flex gap-2 mb-3">
+      <button class="btn btn-success btn-sm" onclick="listUploads()">
+        <i class="bi bi-folder2-open me-1"></i>Ordner anzeigen
+      </button>
+      <a href="?action=wget_script" class="btn btn-warning btn-sm">
+        <i class="bi bi-terminal me-1"></i>Download-Script (curl) herunterladen
+      </a>
+    </div>
+    <p class="small text-muted">💡 Tipp: Lade das curl-Script herunter und führe es lokal aus — lädt alle Dateien automatisch einzeln herunter.</p>
+    <div>
         <i class="bi bi-folder2-open me-1"></i>Upload-Ordner anzeigen
       </button>
       <div id="uploadList"></div>
