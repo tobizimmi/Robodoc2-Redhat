@@ -112,7 +112,11 @@ class SharepointController {
         );
         if (!$attachments) { echo json_encode(['error' => 'No attachments found.']); exit; }
         [$siteId, $siteErr] = self::getSiteId($siteUrl, $token);
-        if (!$siteId) { echo json_encode(['error' => "Could not find SharePoint site: $siteErr."]); exit; }
+        if (!$siteId) {
+            $diag = "Modus: $mode, Site-URL: $siteUrl";
+            error_log("[SharePoint] getSiteId failed: $siteErr | $diag");
+            echo json_encode(['error' => "Could not find SharePoint site: $siteErr. [$diag]"]); exit;
+        }
         $results = []; $errors = [];
         foreach ($attachments as $att) {
             if (!file_exists($att['file_path'])) { $errors[] = ($att['display_name'] ?: $att['original_name']) . ': file not found'; continue; }
@@ -253,7 +257,12 @@ class SharepointController {
         $resp = curl_exec($ch); $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
         $data = json_decode($resp, true);
         if (isset($data['id'])) return [$data['id'], null];
-        return [null, $data['error']['message'] ?? "HTTP $httpCode"];
+        $err = $data['error'] ?? [];
+        $msg = ($err['message'] ?? 'no message') . " (HTTP $httpCode";
+        if (!empty($err['code']))                         $msg .= ', Code: ' . $err['code'];
+        if (!empty($err['innerError']['request-id']))     $msg .= ', Request-ID: ' . $err['innerError']['request-id'];
+        $msg .= ', Graph-URL: /sites/' . $hostname . ':/' . $sitePath . ')';
+        return [null, $msg];
     }
 
     private static function encodePath(string $path): string
