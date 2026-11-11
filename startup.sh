@@ -60,4 +60,5 @@ chmod 777 /home/site/wwwroot/uploads
 
 service nginx reload 2>/dev/null || nginx -s reload 2>/dev/null || true
 
+date "+%F %T startup.sh ran" > /tmp/robodoc_startup_ran
 echo "Startup complete — pdo_mysql: $(php -m | grep pdo_mysql)"
