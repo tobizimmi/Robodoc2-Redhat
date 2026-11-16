@@ -108,8 +108,53 @@ class JiraController
 
             echo json_encode(['success' => true, 'key' => $key, 'url' => $issueUrl, 'attachments' => $uploaded]);
         } else {
-            echo json_encode(['error' => self::extractError($data, $httpCode)]);
+            $msg = self::extractError($data, $httpCode);
+            if (str_contains($msg, 'cannot be set')) {
+                $msg .= ' | ' . self::diagnoseCreate($apiBase, $authHeader, strtoupper($projectKey));
+            }
+            echo json_encode(['error' => $msg]);
         }
+    }
+
+    /**
+     * Jira answers "Field 'summary' cannot be set..." when the calling user is not
+     * authenticated (anonymous) or lacks the CREATE_ISSUES permission in the project.
+     * Ask Jira who we are and what we may do, so the error message says which one it is.
+     */
+    private static function diagnoseCreate(string $apiBase, string $authHeader, string $projectKey): string
+    {
+        $get = static function (string $url) use ($authHeader): array {
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER     => ['Accept: application/json', 'Authorization: ' . $authHeader],
+                CURLOPT_TIMEOUT        => 10,
+            ]);
+            $resp = curl_exec($ch);
+            $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            return [$code, json_decode((string)$resp, true) ?: []];
+        };
+
+        $parts = [];
+        [$code, $me] = $get("$apiBase/myself");
+        if ($code === 200 && !empty($me)) {
+            $who = $me['displayName'] ?? $me['name'] ?? '?';
+            $mail = $me['emailAddress'] ?? '';
+            $parts[] = 'Angemeldet bei Jira als: ' . $who . ($mail ? " <$mail>" : '');
+        } else {
+            $parts[] = "Jira erkennt die Zugangsdaten NICHT (myself: HTTP $code) - API-Token/PAT und E-Mail im Profil prüfen bzw. neu erzeugen";
+        }
+
+        [$code, $perm] = $get("$apiBase/mypermissions?projectKey=" . rawurlencode($projectKey) . '&permissions=CREATE_ISSUES,BROWSE_PROJECTS');
+        if ($code === 200 && isset($perm['permissions'])) {
+            $create = !empty($perm['permissions']['CREATE_ISSUES']['havePermission']);
+            $browse = !empty($perm['permissions']['BROWSE_PROJECTS']['havePermission']);
+            $parts[] = "Projekt $projectKey: sehen " . ($browse ? 'ja' : 'NEIN') . ', Vorgänge anlegen ' . ($create ? 'ja' : 'NEIN');
+        } else {
+            $parts[] = "Rechteprüfung für $projectKey nicht möglich (HTTP $code)";
+        }
+        return implode('; ', $parts);
     }
 
     // -- Update existing linked Jira issue ------------------------
